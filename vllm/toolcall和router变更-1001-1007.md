@@ -1,16 +1,16 @@
 # 2026 年 10 月 1 日至 7 日 tool calling 与 vLLM Router 变更阅读记录
 
-整理日期：2026-10-07。研究仓库：[vllm](https://github.com/vllm-project/vllm)、[vllm-ascend](https://github.com/vllm-project/vllm-ascend)、[router](https://github.com/vllm-project/router)。格式沿用九月记录。
+整理日期：2026-10-09（对 10 月 7 日暂定稿进行完整区间复查）。研究仓库：[vllm](https://github.com/vllm-project/vllm)、[vllm-ascend](https://github.com/vllm-project/vllm-ascend)、[router](https://github.com/vllm-project/router)。格式沿用九月记录。
 
-> **本次为截至抓取时刻的暂定周报。** 抓取于 2026-10-07 14:59–15:03 UTC（北京时间 22:59–23:03）；UTC 的 10 月 7 日尚未结束，不能把本次结果视为全天最终统计。2026-10-08 晚间定时运行应重新核对本区间、补齐晚到变更，并更新同一文件。
+> **完整区间周报。** 2026-10-09 补执行原定 10 月 8 日的首次周四周期，重新分页检索 10 月 1–7 日的全部已合并 PR，并核对补充项关键 diff。区间已完整结束；本次补齐初稿抓取后合并的变更，也更正关键词初筛遗漏。
 
 ## 1. 时间与统计口径
 
-- 区间沿用九月的 UTC 口径：`2026-10-01 00:00:00 ≤ merged_at < 2026-10-08 00:00:00`。下列表格日期是 UTC 合并日期，不是 PR 创建日期或版本发布日期；本次实际可见范围截止上述抓取时刻。
+- 区间沿用九月的 UTC 口径：`2026-10-01 00:00:00 ≤ merged_at < 2026-10-08 00:00:00`。下列表格日期是 UTC 合并日期，不是 PR 创建日期或版本发布日期；本次复查覆盖完整七个 UTC 日期。
 - 交叉检索 tool / parser / reasoning / function / MCP / DSML / structural tag / grammar / Responses / derender / chat_parsing / tool_choice / tool-calling 标签等；阅读 PR 正文，并通过 GitHub REST 的 merged_at 核对时间。
 - 对 GLM 浅层 grammar、模板驱动 hf parser、模板与 grammar 工具集合对齐、PyO3 bridge 移除、render→generate 状态、Kimi K3 token-aware parsing、schema 深度限制及 Ascend 回移进一步阅读关键 diff。
-- 本文归纳 **vLLM 26 项主题及相邻变更、Ascend 1 项直接相关回移**。Ascend 当期全部 39 个已合并 PR 的标题也进行了筛查。vLLM 是主题检索，不是其全部提交的逐行审计，标题/正文未关联关键词的变更仍可能遗漏。
-- Router 对整个区间检索所有已合并 PR，并核对默认分支 main 的 commits API：截至抓取时刻，**已合并 PR 为 0、区间 main 提交为 0**。
+- 本文归纳 **vLLM 41 项主题及相邻变更、Ascend 1 项直接相关回移**。GitHub Search 分页完整返回 vLLM 350 个、Ascend 39 个已合并 PR（incomplete_results=false），筛查全部标题后阅读相关正文与关键 diff；这是主题阅读，不是全部代码的逐行审计。
+- Router 对整个区间检索所有已合并 PR，并核对默认分支 main 的 commits API：完整区间内，**已合并 PR 为 0、区间 main 提交为 0**。
 - 主体以已合并代码为依据；RFC、未合并 PR、依赖来源不计为本期落地项。main 合并不等于某个 release / Ascend 镜像已经包含。性能和测试是作者记录，本次未执行 GPU/NPU serving 或模型质量复现。
 
 复查入口：[vLLM 区间已合并 PR](https://github.com/vllm-project/vllm/pulls?q=is%3Apr+is%3Amerged+merged%3A2026-10-01..2026-10-07)、[Ascend 区间已合并 PR](https://github.com/vllm-project/vllm-ascend/pulls?q=is%3Apr+is%3Amerged+merged%3A2026-10-01..2026-10-07)、[Router 区间已合并 PR](https://github.com/vllm-project/router/pulls?q=is%3Apr+is%3Amerged+merged%3A2026-10-01..2026-10-07)。
@@ -26,7 +26,7 @@
 | grammar / schema | Rust $ref coercion 与 grammar 共用 SchemaRoot；修复深嵌套 schema、spec decode 未约束行 | 防止 schema / decoder / parser 解释不一致；深度上限不是业务对象递归层数的简单映射 |
 | 拆分前端 | 修复 render 默认 parser、reasoning 状态透传及 derender prompt 上下文 | render→generate→derender 与耦合 chat endpoint 的一致性更完善 |
 | Ascend | 回移 GLM-5.3 always-on reasoning 识别 | 不支持关闭模型思考；目的是避免 reasoning 落入 content |
-| Router | 截至抓取时刻无区间已合并 PR 或 main 提交 | 九月 gRPC 主动 tool calling 的限制没有本期代码依据可宣称解除 |
+| Router | 完整区间无已合并 PR 或 main 提交 | 九月 gRPC 主动 tool calling 的限制没有本期代码依据可宣称解除 |
 
 ## 3. vLLM：新特性与能力扩展
 
@@ -129,7 +129,7 @@ patch 在 kwargs 副本上归一化，保留其余配置与 constructor 调用�
 
 ## 9. vLLM Router：本区间无已落地主线变更
 
-| 核对项 | 截至抓取时刻的结果 | 来源 |
+| 核对项 | 完整区间复查结果 | 来源 |
 | --- | --- | --- |
 | 10.01–10.07 的已合并 PR | 0，REST search incomplete_results=false | [PR 检索](https://github.com/vllm-project/router/pulls?q=is%3Apr+is%3Amerged+merged%3A2026-10-01..2026-10-07) |
 | main 的区间 commits | commits API 返回空数组 []，无直接提交可补充 | [区间 commits API](https://api.github.com/repos/vllm-project/router/commits?since=2026-10-01T00%3A00%3A00Z&until=2026-10-07T23%3A59%3A59Z&per_page=100) |
@@ -151,10 +151,56 @@ patch 在 kwargs 副本上归一化，保留其余配置与 constructor 调用�
 
 以上是本次阅读建议。具体源码从各 PR 的 Files changed / merge commit 查看，避免用不断变化的 main 页面替代当时 diff。
 
-## 11. 定时执行与后续补齐
+## 10A. 完整区间复查补充（2026-10-09）
+
+以下 15 项与前文 26 项不重复。#59749、#58911 在初稿抓取时刻之后合并；其余为全量标题筛查后补入的主题或拆分前端相邻项。日期均为 UTC merged_at。PR 正文可能保留早期“draft”或实现计划，落地判断以已合并元数据和最终 diff 为准。
+
+### 工具解析与流式 bugfix
+
+| 日期 | 变更 | 适用边界与关键代码 | 来源 |
+| --- | --- | --- | --- |
+| 10-02 | GLM 工具字符串保留前后空白 | Rust glm45/glm47 共用 XML parser 移除 arg_value 的 trim；完整与流式均保留缩进、换行。数值仍按 schema 转换。Python parser、其他 Rust parser 不属于此补丁 | [#59654](https://github.com/vllm-project/vllm/pull/59654) |
+| 10-07 | parser/tokenizer 不兼容时启动失败 | ParserManager.get_parser 先组合 parser，再实例化校验，把首次请求 500 提前为启动 TypeError；同时覆盖 reasoning/Harmony 路径。tokenizer=None 时跳过，不保证检测模型输出质量问题 | [#59749](https://github.com/vllm-project/vllm/pull/59749) |
+| 10-07 | reasoning 结束后缓冲文本不再丢失 | abstract_parser.parse_delta 在 engine-based reasoning、未配置 tool parser 时将 finish_streaming 冲出的 current_text 发为 content；有 tool parser 时仍交由工具阶段消费。影响 Chat/Responses 流式，多 token chunk 更容易触发 | [#58911](https://github.com/vllm-project/vllm/pull/58911) |
+| 10-07 | 完整 marker 回退与 Qwen XML lookalike 及时输出 | safe_text_len_mul 遇完整 marker 返回 Backtrack，部分 marker/空输入仍 Incomplete；Qwen XML safe-text 停止条件包含必要换行，不符合格式的 `<tool_call>{...` 立即作为文本输出；hf event loop 同步处理两种边界 | [#59563](https://github.com/vllm-project/vllm/pull/59563) |
+| 10-01 | 修复待解码 UTF-8 后独立 token 的来源锚点 | Rust incremental decoder 将可证明独立的后续 token 定位到自己的首字节；byte-fallback 合成字符仍共用锚点，解码文本不变。是 #58358 token-aware marker 判断的基础，不能算作新模型能力 | [#58357](https://github.com/vllm-project/vllm/pull/58357) |
+
+### Schema 共享正确性
+
+| 日期 | 变更 | 适用边界 | 来源 |
+| --- | --- | --- | --- |
+| 10-05 | Guidance 不再改写 schema 中的字面值 | disable_additional_properties 的遍历只进入 schema-bearing keywords，不向 const/enum/default/examples 的对象字面值或 properties 映射注入 additionalProperties=false；仅该 Guidance 配置路径 | [#58709](https://github.com/vllm-project/vllm/pull/58709) |
+| 10-06 | xgrammar 标识多分支 allOf 为不支持 | 递归检测长度≥2 的 allOf，显式 xgrammar 校验抛 VLLMValidationError，避免把不受支持约束当作有效 grammar；这不是新增 allOf 支持，也不应推广到其他后端或 Rust SchemaRoot | [#59061](https://github.com/vllm-project/vllm/pull/59061) |
+
+### render / derender 相邻新特性与协议变化
+
+| 日期 | 分类与变更 | 适用边界 | 来源 |
+| --- | --- | --- | --- |
+| 10-03 | 新特性：generate 增加 output_mode=text | `/inference/v1/generate` 默认 tokens；text 同时返回 token IDs 与 detokenized text，减少独立 derender 调用。需要 tokenizer 且 detokenize=true，tokens-only 不能使用；derender 拒绝已裁剪 stop-string 的 text 响应。新增受 API key 保护的 `/inference/v1/abort_requests` 与使用文档。RFC 的 Phase 1 已落地，不代表整个 RFC 完成 | [#58588](https://github.com/vllm-project/vllm/pull/58588) |
+| 10-06 | 协议/重构：generate logprobs 改为整数 token_id | Python/Rust tokens generate 使用 GenerateLogProbs.content，保留 rank/top_logprobs 列表，去掉 token_id:N 字符串占位与 bytes；derender 才转换成 OpenAI token/bytes。调用自定义 generate API 的客户端须适配，常规 OpenAI 输出形状不因本项更改；sampled 扩展不计入该 PR | [#58181](https://github.com/vllm-project/vllm/pull/58181) |
+| 10-04 | bugfix：token 流保留 abort 终止原因 | 无新增 token 的 terminal output 仍输出 finish_reason；计数器按 sampling_params.n 初始化，避免多 choice 尚未全部出现时越界。范围是 Python scale-out generate，text 模式与 Rust 已有相应终止输出 | [#47933](https://github.com/vllm-project/vllm/pull/47933) |
+| 10-07 | bugfix：Cohere Chat v2 客户端错误返回 4xx | chat 与 render catch 分支改用共用 create_error_response，非法采样参数等不再一律 500；Cohere message/id 错误外壳保留，未知内部错误仍 500。属于前端协议相邻修复，不是新增工具 parser | [#60309](https://github.com/vllm-project/vllm/pull/60309) |
+
+### Agent 路径性能与测试维护
+
+| 日期 | 分类与变更 | 适用边界与验证归因 | 来源 |
+| --- | --- | --- | --- |
+| 10-01 | 性能/bugfix：清理 Claude Code billing prompt 行 | chat_utils 仅对 system 内容中以 x-anthropic-billing-header 开头的 text part 删除首行，保留其后文本；这是请求体文本，不是 HTTP header。减少部分 Claude Code 经 Anthropic→OpenAI 网关时动态归因字段导致的 prefix-cache miss，不能归为 Router 缓存优化。作者 Qwen3-0.6B/LiteLLM 实验中有动态 cch 的版本从约 0.1–0.2% 提升到约 99%；本次未复现，不推广到所有版本/认证路径 | [#59419](https://github.com/vllm-project/vllm/pull/59419) |
+| 10-01 | 测试兼容：Anthropic SDK 1.x | 流式 cache-usage 测试改用 extra_body 传 temperature，兼容 0.x/1.x SDK 签名；服务端原本已接受 temperature，不是新增线上协议能力。作者报告 SDK 0.71.0 和 1.6.0 各通过该测试 | [#57780](https://github.com/vllm-project/vllm/pull/57780) |
+
+### vLLM 后端 gRPC 相邻项（不计为 Router 仓库变更）
+
+| 日期 | 变更 | 后端支持边界 | 来源 |
+| --- | --- | --- | --- |
+| 10-02 | Python vllm serve 暴露 Rust --grpc-port | Rust frontend 可同时监听 HTTP 与 vllm.Inference/Control gRPC；最终 diff 包含继承 socket 的交接。与 Python SMG `--grpc` 服务是不同协议，二者互斥；headless、multi-port external LB 等不支持。作者 CPU mock-engine smoke 验证启动与传输，不是模型/GPU或多节点性能验证 | [#59659](https://github.com/vllm-project/vllm/pull/59659) |
+| 10-07 | Rust gRPC 禁止 token 序列与 cache usage | 新 protobuf 字段 bad_words_token_ids 经 shared lowering 进入 engine-core，空序列/词表外 ID 被拒绝；terminal unary/streaming 返回 num_cached_tokens（含显式零）。旧服务器可忽略新请求字段，客户端需核对协议版本；不能据此宣称 Router adapter 主动 tool calling 已支持 | [#59837](https://github.com/vllm-project/vllm/pull/59837) |
+
+补充项只做源代码与作者验证记录核对。本次没有运行 vLLM parser 测试、真实模型 GPU/NPU serving、性能基准或 Router 部署；main 合并不等于 release/Ascend 镜像已经包含。
+
+## 11. 定时执行与完成状态
 
 - 每周四 **北京时间 20:00（Asia/Shanghai）** 在本聊天执行，统计前一天结束的七个日期，继续采用 UTC 合并日期口径；例如 10 月 8 日正式覆盖 10.01–10.07，10 月 15 日覆盖 10.08–10.14。
 - 按 `toolcall和router变更-MMDD-MMDD.md` 保存；标题保留年份，跨年/同名年份冲突时文件名也增加年份。
 - 文档校验后，用 `Liccol <740821011@qq.com>` 提交本次记录并推送 `origin/main`。不把凭证写入文件，不对远程冲突使用 force push。
 - 已完整成功统计且已推送、来源无实质变化时不重复通知；暂定报告必须在区间结束后复查。失败时保留本地成果并报告具体阶段。
-- **本次区间状态：暂定，等待 2026-10-08 定时复查补齐。** 这里的状态描述统计完整性，不代替 Git 推送结果；推送成功与否由执行结果另行报告。
+- **本次区间状态：2026-10-01 至 2026-10-07 已完整结束，2026-10-09 已复查补齐。** 这里的状态描述统计完整性，不代替 Git 推送结果；推送成功与否由执行结果另行报告。
