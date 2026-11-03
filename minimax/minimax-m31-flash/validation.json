@@ -1,7 +1,7 @@
 {
   "date": "2026-11-03",
   "scope": "offline packaging; no NPU rerun",
-  "files_checked": 59,
+  "files_checked": 76,
   "missing_relative_links": [],
   "known_secret_findings": [],
   "python_syntax": "passed",
@@ -13,5 +13,7 @@
     "login credentials",
     "container images"
   ],
-  "modified_helpers": "sleep_determinism_probe relative workflow import; not NPU revalidated"
+  "modified_helpers": "sleep_determinism_probe relative workflow import; not NPU revalidated",
+  "details_report": "full/VALIDATION_DETAILS.md",
+  "added_evidence": "routing arrays, endpoint raw responses, latest Level1 diagnosis"
 }
