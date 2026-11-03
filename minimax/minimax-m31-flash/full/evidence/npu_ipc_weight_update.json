@@ -1,0 +1,49 @@
+{
+  "feature": "npu_ipc_weight_update",
+  "status": "failed",
+  "blocker_kind": "capacity",
+  "validation_scope": "real full checkpoint native IPC transfer, interrupted after receiver OOM",
+  "weight_update_acceptance": "real_checkpoint_outputs_identical",
+  "checkpoint_path": "/mnt/weight/MiniMax-M3.1-Flash-BF16/",
+  "inference_world_size": 16,
+  "producer_world_size": 16,
+  "packed_buffer_mb": 3072,
+  "gpu_memory_utilization": 0.8,
+  "max_model_len": 131072,
+  "checks": {
+    "distributed_producer_handshake": true,
+    "checkpoint_manifest_consistent": true,
+    "sleep_level2": true,
+    "wake_weights": true,
+    "partial_stream_http_200_count": 10,
+    "checkpoint_stream_transfer": false,
+    "post_update_available": false
+  },
+  "endpoint_checks": {
+    "/v1/completions": null,
+    "/v1/chat/completions": null
+  },
+  "reason": "Actual receiver NPU OOM at packed_tensor.py:321 clone; update incomplete; post-update acceptance not run",
+  "native_verifier_report": "Not written before producer termination; no synthetic passed verifier report is substituted",
+  "error_evidence": {
+    "timestamp_utc": "2026-10-26 21:00:10",
+    "timestamp_china": "2026-10-27 05:00:10",
+    "device": 0,
+    "allocation_request_mib": 36,
+    "reported_free_mib": 26.96,
+    "reported_total_gib": 91.75,
+    "reported_allocated_gib": 98.82,
+    "reported_reserved_gib": 100.68,
+    "location": "vllm_ascend/distributed/weight_transfer/packed_tensor.py:321",
+    "statement": "tensor = raw.contiguous().view(dtype).view(*shape).clone()"
+  },
+  "evidence": [
+    "logs/ipc-first-update-500-diagnosis.json",
+    "logs/ipc-final-177.11.25.1-stderr.log",
+    "logs/ipc-final-177.11.25.1-stdout.log",
+    "logs/177.11.25.1-ipc-producer.log",
+    "logs/177.11.26.1-ipc-producer.log",
+    "checkpoint-schema.json.gz"
+  ],
+  "recovery": "Verified producers and service stopped; no post-update generation attempted with incomplete weights; 16 devices free"
+}

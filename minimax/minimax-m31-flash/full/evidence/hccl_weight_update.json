@@ -1,0 +1,20 @@
+{
+  "feature": "hccl_weight_update",
+  "status": "blocked",
+  "validation_scope": "prerequisite_check",
+  "reason": "The skill requires a separate physical producer NPU. The approved inference topology uses all 16 authorized NPUs and no spare producer device is available.",
+  "checks": {
+    "inference_devices": 16,
+    "authorized_devices": 16,
+    "spare_producer_devices": 0
+  },
+  "baseline_config_revision": "minimax-user-baseline-v2-timeout3600",
+  "evidence": [
+    "audit.md",
+    "../../.workspace-local/validation-program/run-20261026/pre-start-device-probe-shared.json"
+  ],
+  "endpoint_checks": {
+    "/v1/completions": null,
+    "/v1/chat/completions": null
+  }
+}
