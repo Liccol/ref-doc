@@ -1,5 +1,7 @@
 # 全层 BF16 开箱测试记录与复现
 
+完整逐用例检查项、逐轮比较与显存实测表见 [验证详单](VALIDATION_DETAILS.md)。
+
 ## 环境与版本
 
 双机 Ascend A5，各 8 张物理卡，容器 `example-container`。完整权重路径 `/path/to/artifact`，60 层语言模型；历史权重文件共 204 分片、23428 张量，文件总量约 795.536 GiB。

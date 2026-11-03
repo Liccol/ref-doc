@@ -1,0 +1,5 @@
+{
+  "returncode": 0,
+  "stdout": "SIZE_GIB=1\nALLOC_OK 1073741824\nSIZE_GIB=4\nALLOC_OK 4294967296\nSIZE_GIB=8\nALLOC_OK 8589934592\n",
+  "stderr": ""
+}

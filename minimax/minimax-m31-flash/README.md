@@ -7,6 +7,7 @@
 - [模型结构说明与完整参数表](architecture/README.md)：主干、MSA/indexer、残差、专家及视觉融合。
 - [高清模型图 4800×5560](architecture/minimax-m31-full-architecture.png) · [可编辑 SVG](architecture/minimax-m31-full-architecture.svg)。
 - [全层测试：服务启动、测试命令、结果及边界](full/README.md)。
+- [验证详单：逐轮比较、显存与失败诊断](full/VALIDATION_DETAILS.md)。
 - [减层 RL：当前证据状态和补验清单](reduced/README.md)。
 - [历史自动化命令（凭据已脱敏）](full/commands/historical-commands.txt)。
 - [归档校验清单](SHA256SUMS) · [检查记录](validation.json)。
