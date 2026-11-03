@@ -1,0 +1,347 @@
+{
+  "feature": "long_sequence_dual_api",
+  "status": "passed",
+  "status_reason": "两个规模点（1M 字符 / ≈1M tokens）上 /v1/completions 与 /v1/chat/completions 均返回 200，token 列表非空、logprob 数量对齐且全为有限值，输出为正确中文答案并识别首尾标记。",
+  "recorded_at": "2026-10-27T20:12:01+0800",
+  "service": {
+    "url": "http://192.0.2.12:31070",
+    "model": "MiniMax-M3.1-Flash-BF16",
+    "max_model_len": 1001024,
+    "served_model_name_checked": true,
+    "topology": "双机 TP4 x PP4 x DP1，EP 开启，原生 mp 拉起",
+    "nodes": [
+      {
+        "role": "head",
+        "host": "192.0.2.12",
+        "pid": 300912,
+        "port": 31070,
+        "devices": "0,1,2,3,4,5,6,7",
+        "runtime_dir": "/path/to/artifact",
+        "native_node_rank": 0
+      },
+      {
+        "role": "worker",
+        "host": "192.0.2.13",
+        "pid": 226427,
+        "port": 31070,
+        "devices": "0,1,2,3,4,5,6,7",
+        "runtime_dir": "/path/to/artifact",
+        "native_node_rank": 1
+      }
+    ],
+    "container": "example-container",
+    "sampling": {
+      "temperature": 0,
+      "top_p": 1,
+      "seed": 0,
+      "max_tokens": 1024
+    }
+  },
+  "checks": {
+    "completions_returns_200_case_a": true,
+    "chat_returns_200_case_a": true,
+    "completions_returns_200_case_b": true,
+    "chat_returns_200_case_b": true,
+    "tokens_non_empty_both_endpoints": true,
+    "logprob_count_matches_tokens": true,
+    "logprobs_finite": true,
+    "case_a_cross_endpoint_identical": true,
+    "chat_reproducible_double_run": true,
+    "completions_reproducible_double_run": false,
+    "request_scope_corrected_not_first_request": true
+  },
+  "endpoint_checks": {
+    "/v1/completions": true,
+    "/v1/chat/completions": true
+  },
+  "cases": {
+    "case_a_1m_characters": {
+      "description": "1,000,000 字符中文长文 + 提问，chat 模板后 560,793 prompt tokens",
+      "prompt_tokens": 560793,
+      "endpoints": {
+        "/v1/completions": {
+          "http_status": 200,
+          "finish_reason": "stop",
+          "elapsed_seconds": 83.39870619773865,
+          "prompt_tokens": 560793,
+          "completion_tokens": 701,
+          "reasoning_tokens": null,
+          "generated_tokens": 701,
+          "logprob_stats": {
+            "count": 701,
+            "finite_count": 701,
+            "min": -1.9749835729599,
+            "max": 0.0,
+            "mean": -0.18452052469378633
+          },
+          "text_field": "text",
+          "text": "<mm:think>用户要求概括长文本的主要主题，并说明开头和结尾的标记。\n\n文本内容：开头标记是【起始标记】长序列输入测试文本开始，正文共 1,000,000 个字符。结尾标记是【结束标记】长序列输入测试文本结束。\n\n正文内容：24个段落循环重复，主题包括：\n1. 人工智能与大语言模型（AI改变社会、深度学习、数据算力算法、注意力机制、长上下文、稀疏注意力/滑动窗口/旋转位置编码、大海捞针测试、业务场景）\n2. 中华文明与传统文化\n3. 自然界与科学探索\n4. 春日景色\n5. 阅读与书籍\n6. 科技发展史\n7. 教育\n8. 健康\n9. 生态文明（绿水青山）\n10. 金融\n11. 航天\n12. 音乐艺术\n13. 历史\n14. 团结协作\n15. 创新\n\n所以主要主题是：长序列测试文本，以24个主题段落循环重复约1万次，涵盖AI技术、传统文化、自然科学、社会发展等方面。\n\n回答要点：\n- 概括主要主题\n- 开头标记：【起始标记】长序列输入测试文本开始，正文共 1,000,000 个字符。\n- 结尾标记：【结束标记】长序列输入测试文本结束。\n\n注意结尾处文本被截断了（\"凝聚着无数科研工作者的心\"），但结束标记仍然存在。\n\n用中文简洁回答。</mm:think>## 主要主题概括\n\n这是一份用于**长序列输入能力测试**的示例文本，正文由 24 个主题段落循环重复约 1 万次构成，整体内容可归纳为以下几类：\n\n1. **人工智能与大语言模型**（占比最重、重复最多）：AI 深刻改变人类社会；深度学习自动提取特征；数据、算力、算法为三大要素；注意力机制与自回归生成构成技术底座；长上下文能力可一次性处理整本书、完整代码仓库；稀疏注意力、滑动窗口注意力、旋转位置编码等优化技术降低计算与显存开销；用\"大海捞针测试\"评测检索与长距离依赖建模能力；长序列在审计、法律条文等实际业务中的价值。\n2. **中华文明与传统文化**：数千年典籍、先秦诸子、唐宋诗文、四大发明、丝绸之路等构成文化底蕴。\n3. **自然与科学探索**：日月星辰、山川河流、微观粒子与生态平衡的规律揭示。\n4. **人文与生活图景**：春日景色、阅读与书籍、科技发展史、教育、健康、生态文明（绿水青山）、金融、航天（嫦娥探月、天问探火、北斗、中国空间站）、音乐与艺术、鉴史明理、团结协作、创新驱动等。\n\n整体上，文本以\"**人工智能长上下文技术**\"为主线，辅以文化、自然、社会、科技等多元主题的重复排布，目的是测试模型在超长输入下的信息保持与检索能力。\n\n## 开头与结尾标记\n\n- **开头标记**：`【起始标记】长序列输入测试文本开始，正文共 1,000,000 个字符。`\n- **结尾标记**：`【结束标记】长序列输入测试文本结束。`\n\n（补充说明：正文最后一段\"宇宙浩瀚无垠……凝聚着无数科研工作者的心\"处文字略有截断，但结束标记完整存在。）",
+          "contract_passed": true,
+          "contract_problems": []
+        },
+        "/v1/chat/completions": {
+          "http_status": 200,
+          "finish_reason": "stop",
+          "elapsed_seconds": 83.97885298728943,
+          "prompt_tokens": 560793,
+          "completion_tokens": 701,
+          "reasoning_tokens": 304,
+          "generated_tokens": 701,
+          "logprob_stats": {
+            "count": 701,
+            "finite_count": 701,
+            "min": -1.9749835729599,
+            "max": 0.0,
+            "mean": -0.18452052469378633
+          },
+          "text_field": "content",
+          "text": "## 主要主题概括\n\n这是一份用于**长序列输入能力测试**的示例文本，正文由 24 个主题段落循环重复约 1 万次构成，整体内容可归纳为以下几类：\n\n1. **人工智能与大语言模型**（占比最重、重复最多）：AI 深刻改变人类社会；深度学习自动提取特征；数据、算力、算法为三大要素；注意力机制与自回归生成构成技术底座；长上下文能力可一次性处理整本书、完整代码仓库；稀疏注意力、滑动窗口注意力、旋转位置编码等优化技术降低计算与显存开销；用\"大海捞针测试\"评测检索与长距离依赖建模能力；长序列在审计、法律条文等实际业务中的价值。\n2. **中华文明与传统文化**：数千年典籍、先秦诸子、唐宋诗文、四大发明、丝绸之路等构成文化底蕴。\n3. **自然与科学探索**：日月星辰、山川河流、微观粒子与生态平衡的规律揭示。\n4. **人文与生活图景**：春日景色、阅读与书籍、科技发展史、教育、健康、生态文明（绿水青山）、金融、航天（嫦娥探月、天问探火、北斗、中国空间站）、音乐与艺术、鉴史明理、团结协作、创新驱动等。\n\n整体上，文本以\"**人工智能长上下文技术**\"为主线，辅以文化、自然、社会、科技等多元主题的重复排布，目的是测试模型在超长输入下的信息保持与检索能力。\n\n## 开头与结尾标记\n\n- **开头标记**：`【起始标记】长序列输入测试文本开始，正文共 1,000,000 个字符。`\n- **结尾标记**：`【结束标记】长序列输入测试文本结束。`\n\n（补充说明：正文最后一段\"宇宙浩瀚无垠……凝聚着无数科研工作者的心\"处文字略有截断，但结束标记完整存在。）",
+          "contract_passed": true,
+          "contract_problems": []
+        }
+      },
+      "cross_endpoint": {
+        "prompt_tokens": 560793,
+        "token_lengths": [
+          701,
+          701
+        ],
+        "token_sequences_identical": true,
+        "first_token_difference_index": null,
+        "shared_prefix_tokens": 701,
+        "max_abs_logprob_difference": 0.0,
+        "both_endpoints_passed": true
+      },
+      "passed": true
+    },
+    "case_b_near_1m_tokens": {
+      "description": "1,748,682 字符中文长文，chat 模板后 976,530 prompt tokens（max_model_len 下 chat 可达的上限为 1,000,000）",
+      "prompt_tokens": 976530,
+      "endpoints": {
+        "/v1/completions": {
+          "http_status": 200,
+          "finish_reason": "length",
+          "elapsed_seconds": 47.71400570869446,
+          "prompt_tokens": 976530,
+          "completion_tokens": 1024,
+          "reasoning_tokens": null,
+          "generated_tokens": 1024,
+          "logprob_stats": {
+            "count": 1024,
+            "finite_count": 1024,
+            "min": -1.7890106439590454,
+            "max": -1.6689285757820471e-06,
+            "mean": -0.037684657591949944
+          },
+          "text_field": "text",
+          "text": "<mm:think> 主要 主要\n\n用户主题主题用户要求：：主题概括阅读阅读概括概括全文以上主要主要主要全文主题主题主题主题主题概括概括概括主题概括概括概括主题概括概括主题概括概括概括概括概括主题主题概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括概括",
+          "contract_passed": true,
+          "contract_problems": []
+        },
+        "/v1/chat/completions": {
+          "http_status": 200,
+          "finish_reason": "stop",
+          "elapsed_seconds": 167.97121405601501,
+          "prompt_tokens": 976530,
+          "completion_tokens": 865,
+          "reasoning_tokens": 435,
+          "generated_tokens": 865,
+          "logprob_stats": {
+            "count": 865,
+            "finite_count": 865,
+            "min": -1.8902785778045654,
+            "max": 0.0,
+            "mean": -0.22953555554188104
+          },
+          "text_field": "content",
+          "text": "## 主要主题概括\n\n这是一份**长序列输入压力测试文本**，正文由约 24 个主题段落组成一个循环单元，并被反复重复数千次。其内容主题可归为两大类：\n\n**1. 人工智能与大语言模型（核心，占前 10 段）**\n- 人工智能正深刻改变人类社会，大语言模型凭借理解与生成能力，应用于自然语言处理、代码生成、知识问答等场景\n- 深度学习通过多层神经网络自动提取特征；数据、算力、算法被视为三大要素\n- 注意力机制与自回归生成范式构成现代语言模型的技术底座\n- 长上下文能力使模型可一次性处理整本书籍、完整代码仓库或大规模文档集\n- 稀疏注意力、滑动窗口注意力、旋转位置编码等优化技术降低计算与显存开销\n- 上下文扩展需防范注意力稀释与位置漂移；评测采用\"大海捞针测试\"\n- 实际业务价值：一次性分析完整对话历史、审计报告、法律条文，减少信息损耗与成本\n\n**2. 人文社科与自然主题（其余 14 段）**\n- 中华文明与典籍传承、自然界规律与科学探索、春日景色、阅读与书籍的滋养\n- 科技发展史、教育立德树人、健康四大基石、生态保护（绿水青山）、金融与实体经济、中国航天\n- 音乐艺术、历史文化、团结协作、创新驱动发展\n\n整体上，文本以\"技术论述 + 价值倡导\"交替出现，重复结构本身即为测试长上下文处理与记忆能力的载体。\n\n## 开头与结尾标记\n\n| 位置 | 标记内容 |\n|---|---|\n| **开头** | `【起始标记】` —— 后接\"长序列输入测试文本开始，正文共 1,748,587 个字符。\" |\n| **结尾** | `【结束标记】` —— 后接\"长序列输入测试文本结束。\" |\n\n即：文本以 **【起始标记】** 开始，以 **【结束标记】** 结束，二者共同界定了测试正文的完整边界。",
+          "contract_passed": true,
+          "contract_problems": []
+        }
+      },
+      "cross_endpoint": {
+        "prompt_tokens": 976530,
+        "token_lengths": [
+          1024,
+          865
+        ],
+        "token_sequences_identical": false,
+        "first_token_difference_index": 1,
+        "shared_prefix_tokens": 1,
+        "both_endpoints_passed": true
+      },
+      "passed": true
+    }
+  },
+  "stability_observation": {
+    "summary": "≈1M tokens 上首次 /v1/completions 请求输出退化为重复文本，重发后与 chat 输出逐 token 一致；另两次 chat 请求亦完全一致。即 4 次相同输入请求中有 1 次偏离，偏离那次与其余三次从第 1 个生成 token 起分叉。",
+    "identical_runs": [
+      "completions repeat",
+      "chat run 1",
+      "chat run 2"
+    ],
+    "outlier_run": "completions run 1",
+    "outlier_evidence": {
+      "finish_reason": "length",
+      "elapsed_seconds": 47.71400570869446,
+      "generated_tokens": 1024,
+      "text_head": "<mm:think> 主要 主要\n\n用户主题主题用户要求：：主题概括阅读阅读概括概括全文以上主要主要主要全文主题主题主题主题主题概括概括概括主题概括概括概括主题概括概括主题概括概括概括概括概括主题主题概括概括概括概括概括概括概括概括概括概括"
+    },
+    "agreeing_runs_logprob_max_difference": 0.0,
+    "repeat_details": {
+      "completions": {
+        "lengths": [
+          1024,
+          865
+        ],
+        "identical": false,
+        "first_difference_index": 1,
+        "shared_prefix_tokens": 1,
+        "same_endpoint_repeat_identical": false,
+        "first_run_finish_reason": "length",
+        "repeat_finish_reason": "stop",
+        "repeat_elapsed_seconds": 163.3877809047699,
+        "repeat_contract_passed": true
+      },
+      "chat/completions": {
+        "lengths": [
+          865,
+          865
+        ],
+        "identical": true,
+        "first_difference_index": null,
+        "shared_prefix_tokens": 865,
+        "same_endpoint_repeat_identical": true,
+        "first_run_finish_reason": "stop",
+        "repeat_finish_reason": "stop",
+        "repeat_elapsed_seconds": 170.4056899547577,
+        "repeat_contract_passed": true
+      }
+    },
+    "root_cause": "未定位；未修改任何模型/服务配置，现象仅归档。",
+    "timeline_utc": [
+      {
+        "seq": 1,
+        "created": "11:58:23",
+        "endpoint": "/v1/completions",
+        "prompt_tokens": 560793,
+        "completion_tokens": 701,
+        "finish_reason": "stop",
+        "elapsed_seconds": 83.4,
+        "verdict": "normal",
+        "note": "本实例首次大请求，输出正确且与 seq2 逐 token 一致"
+      },
+      {
+        "seq": 2,
+        "created": "11:59:46",
+        "endpoint": "/v1/chat/completions",
+        "prompt_tokens": 560793,
+        "completion_tokens": 701,
+        "finish_reason": "stop",
+        "elapsed_seconds": 84.0,
+        "verdict": "normal",
+        "note": "与 seq1 逐 token 相同，logprob 最大差 0.0"
+      },
+      {
+        "seq": 3,
+        "created": "12:01:49",
+        "endpoint": "/v1/completions",
+        "prompt_tokens": 976530,
+        "completion_tokens": 1024,
+        "finish_reason": "length",
+        "elapsed_seconds": 47.7,
+        "verdict": "degenerate",
+        "note": "离群：从第 1 个生成 token 起分叉，后段无限复读"
+      },
+      {
+        "seq": 4,
+        "created": "12:02:40",
+        "endpoint": "/v1/chat/completions",
+        "prompt_tokens": 976530,
+        "completion_tokens": 865,
+        "finish_reason": "stop",
+        "elapsed_seconds": 168.0,
+        "verdict": "normal",
+        "note": "答案正确"
+      },
+      {
+        "seq": 5,
+        "created": "~12:06",
+        "endpoint": "/v1/completions",
+        "prompt_tokens": 976530,
+        "completion_tokens": 865,
+        "finish_reason": "stop",
+        "elapsed_seconds": 163.4,
+        "verdict": "normal",
+        "note": "同一请求重发，与 seq4 逐 token 相同"
+      },
+      {
+        "seq": 6,
+        "created": "~12:09",
+        "endpoint": "/v1/chat/completions",
+        "prompt_tokens": 976530,
+        "completion_tokens": 865,
+        "finish_reason": "stop",
+        "elapsed_seconds": 170.4,
+        "verdict": "normal",
+        "note": "与 seq4、seq5 逐 token 相同，logprob 差 0.0"
+      }
+    ],
+    "scope_correction": "触发条件不是“首次请求”：本实例 560,793 tokens 的首次大请求（seq1）正常且与 chat 逐 token 一致；异常只出现在 976,530 tokens 规模上的 1 次请求（4 次同输入中 1 次）。",
+    "token_level_evidence": {
+      "first_content_token": {
+        "degenerate": {
+          "token": " 主要",
+          "logprob": -0.8339
+        },
+        "normal": {
+          "token": "用户",
+          "logprob": -0.0889
+        }
+      },
+      "tail_logprobs_degenerate": "≈ -0.0（近乎零熵复读）",
+      "mean_logprob": {
+        "degenerate": -0.0377,
+        "normal": -0.2295
+      },
+      "reading": "同一 prompt 下 argmax 置信度相差约 10 倍，说明两次请求从第 1 个生成 token 起状态就不同，不是后期数值漂移累积。"
+    },
+    "engine_log_evidence": {
+      "source": "logs/dual-api-engine-window.txt；logs/dual-api-engine-log-excerpt.json",
+      "degenerate_interval": {
+        "prompt_throughput_tokens_s": 97636.2,
+        "generation_throughput_tokens_s": 21.1
+      },
+      "normal_interval": {
+        "generation_throughput_tokens_s": 5.4
+      },
+      "prefix_cache_hit_rate_window": "50.0% -> 66.7% -> 75.0% -> 52.3%（退化那次）-> 63.4% -> 70.3% -> 75.0%",
+      "reading": "退化请求的预填与解码都显著快于正常请求（解码约 4 倍），正常推理不会因为内容退化而变快，指向另一条执行路径而非纯数值精度抖动。"
+    },
+    "hypothesis": "退化请求可能走了不同的执行路径（prefix cache 复用 / sparse indexer / 图模式分支之一），尚不能确认；仅凭现有数据不能判定为“精度问题”。",
+    "open_item": {
+      "status": "not_run",
+      "reason": "需要重新拉起同配置服务并做对照实验，用户尚未确认执行窗口。",
+      "experiment": [
+        "同配置重拉服务，同一 976,530-token prompt 连发 3 次 /v1/completions，记录第 1 次是否必然退化",
+        "再以 --no-enable-prefix-caching 重拉，同一 prompt 连发 3 次，观察是否消失",
+        "每次请求同步采集 engine 日志的 prompt/generation throughput 与 prefix cache hit rate"
+      ]
+    }
+  },
+  "evidence": {
+    "outputs_markdown": "dual-api-outputs.md",
+    "raw_archive": "logs/dual-api/（request/response/result/tokenize/summary 的 gzip 归档）",
+    "client_scripts": [
+      ".workspace-local/validation-program/run-20261026/dual_api_smoke.py",
+      ".workspace-local/validation-program/run-20261026/dual_api_1m_case.py",
+      ".workspace-local/validation-program/run-20261026/dual_api_repeat_check.py"
+    ],
+    "launch_log": "logs/launch_commands.txt",
+    "stdout_logs": [
+      "logs/dual-api-case-a.stdout.log",
+      "logs/dual-api-case-b.stdout.log",
+      "logs/dual-api-repeat.stdout.log"
+    ]
+  }
+}

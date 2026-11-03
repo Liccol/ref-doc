@@ -1,0 +1,16 @@
+{
+  "feature": "baseline",
+  "status": "passed",
+  "validation_scope": "service admission, dual-API transport and real image chat; AIME is separate evidence",
+  "endpoint_checks": {
+    "/v1/completions": true,
+    "/v1/chat/completions": true
+  },
+  "text_result": "baseline-text.json",
+  "image_result": "baseline-image.json",
+  "completion_prompt_note": "Initial raw completion prompts returned repeated control markers. The local model chat template produced meaningful completions in the independently launched NZ0 lifecycle service; see checkpoint_reload.json baseline_by_endpoint. This is not an unrecorded original-baseline result.",
+  "formatted_completion_followup": "checkpoint_reload.json",
+  "image_text_check": true,
+  "topology": "TP4 DP4 EP, 2 nodes x 8 NPUs, PP1",
+  "accuracy_evidence": "accuracy-confirmed-summary.json"
+}

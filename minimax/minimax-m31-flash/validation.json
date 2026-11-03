@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-03",
+  "scope": "offline packaging; no NPU rerun",
+  "files_checked": 59,
+  "missing_relative_links": [],
+  "known_secret_findings": [],
+  "python_syntax": "passed",
+  "reduced_status": "evidence_missing",
+  "excluded": [
+    "weights",
+    "device traces",
+    "private keys",
+    "login credentials",
+    "container images"
+  ],
+  "modified_helpers": "sleep_determinism_probe relative workflow import; not NPU revalidated"
+}

@@ -1,0 +1,30 @@
+{
+  "feature": "hardware_efficiency",
+  "status": "passed",
+  "scope": "node-a a sampled NPU, DP0 TP0; full model, ten decode steps",
+  "method": "time-weighted compute-kernel ratios; default empirical ceiling 0.8; <10us contributes duration weight; exclude communication and unsplittable MoE dispatch/combine",
+  "results": {
+    "text": {
+      "weighted_attainment": 1.08245920428778,
+      "compute_duration_us": 322860.217,
+      "compute_calls": 26330,
+      "excluded_calls": 4750,
+      "priority_calls": 346,
+      "source_sha256": "f6dc5ad3ee987ad4f4b3a0ad257252e14a8b6fc3f7b2be4c5a171fdddbb09680",
+      "workbook": "/path/to/local-artifact",
+      "json": "/path/to/local-artifact"
+    },
+    "image": {
+      "weighted_attainment": 1.0778011125021298,
+      "compute_duration_us": 251516.732,
+      "compute_calls": 26320,
+      "excluded_calls": 4740,
+      "priority_calls": 12,
+      "source_sha256": "c3abf9666cb33772d44b3483dc886850892b7db0acbfdb2779ea0c51d8707c9a",
+      "workbook": "/path/to/local-artifact",
+      "json": "/path/to/local-artifact"
+    }
+  },
+  "warning": "Both exporter processes exited 3221226505 after writing the files. ZIP, all operator cached totals, sampled formulas, preview, and native Excel read-only full recalculation passed; raw export status preserved in source JSON and logs.",
+  "verification": "logs/hardware-efficiency-native-excel-check.json"
+}

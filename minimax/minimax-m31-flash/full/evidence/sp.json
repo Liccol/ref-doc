@@ -1,0 +1,10 @@
+{
+  "status": "passed",
+  "sp_enabled_log": true,
+  "endpoint_checks": {
+    "/v1/completions": true,
+    "/v1/chat/completions": true
+  },
+  "text_result": "sp-text.json",
+  "image_result": "sp-image.json"
+}

@@ -1,0 +1,20 @@
+{
+  "feature": "dcp",
+  "status": "blocked",
+  "validation_scope": "prerequisite_check",
+  "reason": "Current MiniMax sparse backend explicitly returns supports_dcp=False; TP4 also equals 4 KV heads, while upstream GQA DCP requires TP > KV heads.",
+  "checks": {
+    "backend_supports_dcp": false,
+    "baseline_tp": 4,
+    "kv_heads": 4
+  },
+  "baseline_config_revision": "minimax-user-baseline-v2-timeout3600",
+  "evidence": [
+    "logs/cp-backend-source.txt",
+    "logs/cp-backend-import-ops-first.stdout.log"
+  ],
+  "endpoint_checks": {
+    "/v1/completions": null,
+    "/v1/chat/completions": null
+  }
+}

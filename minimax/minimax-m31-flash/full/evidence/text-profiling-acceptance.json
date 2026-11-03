@@ -1,0 +1,163 @@
+{
+  "status": "passed",
+  "requests": {
+    "file": "vllm-infqps-concurrency160-MiniMax-M3.1-Flash-BF16-20261027-091731.json",
+    "completed": 160,
+    "failed": 0,
+    "input_lengths": [
+      2048
+    ],
+    "output_lengths": [
+      6144
+    ],
+    "output_throughput": 3559.449300719253
+  },
+  "rank_evidence": [
+    {
+      "host": "192.0.2.12",
+      "rank": "dp0_pp0_tp0_dcp0_ep0_rank0_246179_20261027091513914_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    },
+    {
+      "host": "192.0.2.12",
+      "rank": "dp0_pp0_tp1_dcp0_ep1_rank1_246232_20261027091513914_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    },
+    {
+      "host": "192.0.2.12",
+      "rank": "dp0_pp0_tp2_dcp0_ep2_rank2_246715_20261027091513913_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    },
+    {
+      "host": "192.0.2.12",
+      "rank": "dp0_pp0_tp3_dcp0_ep3_rank3_247196_20261027091513913_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    },
+    {
+      "host": "192.0.2.12",
+      "rank": "dp1_pp0_tp0_dcp0_ep4_rank0_246180_20261027091513914_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    },
+    {
+      "host": "192.0.2.12",
+      "rank": "dp1_pp0_tp1_dcp0_ep5_rank1_246233_20261027091513913_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    },
+    {
+      "host": "192.0.2.12",
+      "rank": "dp1_pp0_tp2_dcp0_ep6_rank2_246714_20261027091513913_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    },
+    {
+      "host": "192.0.2.12",
+      "rank": "dp1_pp0_tp3_dcp0_ep7_rank3_247195_20261027091513913_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    },
+    {
+      "host": "192.0.2.13",
+      "rank": "dp2_pp0_tp0_dcp0_ep8_rank0_180227_20261027091508217_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    },
+    {
+      "host": "192.0.2.13",
+      "rank": "dp2_pp0_tp1_dcp0_ep9_rank1_180262_20261027091508216_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    },
+    {
+      "host": "192.0.2.13",
+      "rank": "dp2_pp0_tp2_dcp0_ep10_rank2_180729_20261027091508216_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    },
+    {
+      "host": "192.0.2.13",
+      "rank": "dp2_pp0_tp3_dcp0_ep11_rank3_181198_20261027091508216_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    },
+    {
+      "host": "192.0.2.13",
+      "rank": "dp3_pp0_tp0_dcp0_ep12_rank0_180228_20261027091507947_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    },
+    {
+      "host": "192.0.2.13",
+      "rank": "dp3_pp0_tp1_dcp0_ep13_rank1_180261_20261027091507946_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    },
+    {
+      "host": "192.0.2.13",
+      "rank": "dp3_pp0_tp2_dcp0_ep14_rank2_180730_20261027091507946_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    },
+    {
+      "host": "192.0.2.13",
+      "rank": "dp3_pp0_tp3_dcp0_ep15_rank3_181199_20261027091507946_ascend_pt",
+      "graph_exec": 10,
+      "rope_cache_kernels": 600,
+      "decode_qk_kernels": 600
+    }
+  ],
+  "middle_window_metrics": {
+    "1": {
+      "num_requests_running": 40.0,
+      "num_requests_waiting": 0.0,
+      "num_preemptions_total": 0.0,
+      "generation_tokens_total": 120851.0
+    },
+    "0": {
+      "num_requests_running": 41.0,
+      "num_requests_waiting": 0.0,
+      "num_preemptions_total": 0.0,
+      "generation_tokens_total": 123867.0
+    },
+    "2": {
+      "num_requests_running": 40.0,
+      "num_requests_waiting": 0.0,
+      "num_preemptions_total": 0.0,
+      "generation_tokens_total": 120851.0
+    },
+    "3": {
+      "num_requests_running": 39.0,
+      "num_requests_waiting": 0.0,
+      "num_preemptions_total": 0.0,
+      "generation_tokens_total": 117844.0
+    }
+  },
+  "middle_window_output_fraction": {
+    "1": 0.49174397786458335,
+    "0": 0.49172303734756095,
+    "2": 0.49174397786458335,
+    "3": 0.4918035523504274
+  },
+  "middle_sample_utc": "2026-10-27T09:15:11.828691+00:00",
+  "scope": "10 graph executions and 600 each of two per-layer decode kernels on every rank; 60-layer coverage inferred from counts"
+}

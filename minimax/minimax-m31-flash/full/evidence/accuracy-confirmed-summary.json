@@ -1,0 +1,33 @@
+{
+  "status": "completed",
+  "rounds": [
+    {
+      "run": "20261026_152543",
+      "samples": 30,
+      "request_success": 30,
+      "request_failure": 0,
+      "accuracy_percent": 93.33333333333333,
+      "correct_count_from_evaluator": 28
+    },
+    {
+      "run": "20261026_160825",
+      "samples": 30,
+      "request_success": 30,
+      "request_failure": 0,
+      "accuracy_percent": 96.66666666666667,
+      "correct_count_from_evaluator": 29
+    },
+    {
+      "run": "20261026_165049",
+      "samples": 30,
+      "request_success": 30,
+      "request_failure": 0,
+      "accuracy_percent": 93.33333333333333,
+      "correct_count_from_evaluator": 28
+    }
+  ],
+  "mean_percent": 94.44444444444444,
+  "sample_stdev_percentage_points": 1.924500897298758,
+  "finish_reason_evidence": "AISBench prediction rows do not retain finish_reason or token usage; no claim of zero output-budget truncations",
+  "raw_archive": "accuracy-original-results.json.gz"
+}

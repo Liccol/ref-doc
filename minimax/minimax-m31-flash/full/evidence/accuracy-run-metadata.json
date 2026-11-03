@@ -1,0 +1,122 @@
+{
+  "config": {
+    "model": "/path/to/artifact",
+    "host": "192.0.2.12",
+    "ssh_port": 22,
+    "runs": 3,
+    "dataset": "aime2026_gen_0_shot_chat_prompt",
+    "dataset_kind": "math",
+    "batch_size": 128,
+    "temperature": 0.0,
+    "seed": 1234,
+    "container": "example-container",
+    "tp": 4,
+    "dp": 4,
+    "serve_args": [
+      "--max-model-len",
+      "131072",
+      "--enable-expert-parallel",
+      "--compilation-config",
+      "{\"cudagraph_mode\":\"FULL_DECODE_ONLY\"}",
+      "--dtype",
+      "bfloat16",
+      "--trust-remote-code",
+      "--generation-config",
+      "vllm",
+      "--gpu-memory-utilization",
+      "0.85",
+      "--max-num-seqs",
+      "16",
+      "--max-num-batched-tokens",
+      "8192",
+      "--enable-chunked-prefill",
+      "--limit-mm-per-prompt",
+      "{\"image\":1,\"video\":0}",
+      "--distributed-executor-backend",
+      "mp",
+      "--reasoning-parser",
+      "minimax_m3"
+    ],
+    "env": {
+      "GLOO_SOCKET_IFNAME": "example_if",
+      "IP_SOCKET_IFNAME": "example_if",
+      "HCCL_SOCKET_IFNAME": "example_if",
+      "HCCL_IF_IP": "192.0.2.10",
+      "VLLM_HOST_IP": "192.0.2.10",
+      "HCCL_OP_EXPANSION_MODE": "CCU_SCHED",
+      "VLLM_WORKER_MULTIPROC_METHOD": "spawn",
+      "VLLM_ENGINE_READY_TIMEOUT_S": "3600"
+    },
+    "worker_hosts": "192.0.2.13",
+    "nnodes": 2
+  },
+  "resources": {
+    "status": "ready",
+    "nodes": [
+      {
+        "node": "192.0.2.12",
+        "ready": true,
+        "missing": []
+      },
+      {
+        "node": "192.0.2.13",
+        "ready": true,
+        "missing": []
+      }
+    ]
+  },
+  "network": {
+    "status": "skipped",
+    "reason": "local_resources_ready",
+    "nodes": [
+      {
+        "node": "192.0.2.12",
+        "ready": true,
+        "missing": []
+      },
+      {
+        "node": "192.0.2.13",
+        "ready": true,
+        "missing": []
+      }
+    ]
+  },
+  "nodes": [
+    "192.0.2.12",
+    "192.0.2.13"
+  ],
+  "rounds": [
+    {
+      "accuracy": 0.9333,
+      "round": 1,
+      "status": "ok",
+      "stdout_log": "/path/to/local-artifact",
+      "stderr_log": "/path/to/local-artifact"
+    },
+    {
+      "accuracy": 0.9667,
+      "round": 2,
+      "status": "ok",
+      "stdout_log": "/path/to/local-artifact",
+      "stderr_log": "/path/to/local-artifact"
+    },
+    {
+      "accuracy": 0.9333,
+      "round": 3,
+      "status": "ok",
+      "stdout_log": "/path/to/local-artifact",
+      "stderr_log": "/path/to/local-artifact"
+    }
+  ],
+  "aggregated": {
+    "total_rounds": 3,
+    "successful_rounds": 3,
+    "failed_rounds": 0,
+    "accuracy_mean": 0.944433,
+    "accuracy_stdev": 0.019283,
+    "accuracy_min": 0.9333,
+    "accuracy_max": 0.9667
+  },
+  "duration_seconds": 7872.9,
+  "report": "/path/to/local-artifact"
+}

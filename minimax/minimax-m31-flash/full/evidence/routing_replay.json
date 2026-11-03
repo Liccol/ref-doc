@@ -1,0 +1,86 @@
+{
+  "status": "passed",
+  "endpoint_checks": {
+    "/v1/completions": true,
+    "/v1/chat/completions": true,
+    "image:/v1/chat/completions": true
+  },
+  "arrays": [
+    {
+      "endpoint": "/v1/completions",
+      "shape": [
+        211,
+        60,
+        4
+      ],
+      "dtype": "uint8",
+      "min": 0,
+      "max": 127,
+      "array_file": "/path/to/artifact",
+      "local_array_file": "routing_arrays/routing-0.npy",
+      "sha256": "da1a5444c8a4a008c0f93c8646d1dac5183025ae3e6f269b4ee49d287c1233f7"
+    },
+    {
+      "endpoint": "/v1/completions",
+      "shape": [
+        203,
+        60,
+        4
+      ],
+      "dtype": "uint8",
+      "min": 0,
+      "max": 127,
+      "array_file": "/path/to/artifact",
+      "local_array_file": "routing_arrays/routing-1.npy",
+      "sha256": "503f8cfe44fd8f7e464b205374b82aa1a1a351461aa65ae6800504393c748286"
+    },
+    {
+      "endpoint": "/v1/chat/completions",
+      "shape": [
+        211,
+        60,
+        4
+      ],
+      "dtype": "uint8",
+      "min": 0,
+      "max": 127,
+      "array_file": "/path/to/artifact",
+      "local_array_file": "routing_arrays/routing-2.npy",
+      "sha256": "da1a5444c8a4a008c0f93c8646d1dac5183025ae3e6f269b4ee49d287c1233f7"
+    },
+    {
+      "endpoint": "/v1/chat/completions",
+      "shape": [
+        203,
+        60,
+        4
+      ],
+      "dtype": "uint8",
+      "min": 0,
+      "max": 127,
+      "array_file": "/path/to/artifact",
+      "local_array_file": "routing_arrays/routing-3.npy",
+      "sha256": "503f8cfe44fd8f7e464b205374b82aa1a1a351461aa65ae6800504393c748286"
+    },
+    {
+      "endpoint": "image:/v1/chat/completions",
+      "shape": [
+        375,
+        60,
+        4
+      ],
+      "dtype": "uint8",
+      "min": 0,
+      "max": 127,
+      "array_file": "/path/to/artifact",
+      "local_array_file": "routing_arrays/routing-4.npy",
+      "sha256": "b46af59d66df26e9a771dd2e91da304c7ace396dd7b255224b2eede4be74e018"
+    }
+  ],
+  "expected_shape": [
+    null,
+    60,
+    4
+  ],
+  "scope": "real dual-node HTTP routed-expert capture on text and image; no separate trainer replay consumption or in-process VllmRunner claim"
+}
