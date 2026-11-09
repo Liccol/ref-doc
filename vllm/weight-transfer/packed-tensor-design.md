@@ -1,6 +1,6 @@
 # Packed tensor 方法、流程与复用设计
 
-文档版本：**v1.0.2**。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+文档版本：**v1.0.3**。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 1. 阅读基准与方法清单
 
@@ -457,7 +457,7 @@ main 原 packed 文件为 449 行；引入既有 V2 wrapper 后为 339 行；当
 
 当前 main 配套 24420b7a 与 v0.33.0 4ba787ec 的 CPU 回归均为 **179 passed、无 xfail、退出码 0**。其中 weight-transfer 为 178 项，另有既有 V2 wrapper 用例 1 项。main 原有测试函数均保留。
 
-IPC 共享改动还单独运行了一个全新进程的 IPC 未对齐解包用例，**1 passed**，验证 IPC 不依赖 HCCL 先调用。测试 留档：`/path/to/artifact`、`v033-ut.log`、`standalone-ipc.log`、`summary.json`；该 summary 中代码文件 SHA-256 与当前本地工作树核对一致。
+IPC 共享改动还单独运行了一个全新进程的 IPC 未对齐解包用例，**1 passed**，验证 IPC 不依赖 HCCL 先调用。
 
 main 已将 E2E 公共逻辑迁移到 `tests/e2e/common/rlhf/weight_transfer/`，入口在 `tests/e2e/pull_request/two_card/rlhf/weight_transfer/` 下的 HCCL/IPC 目录。新目录在 main 配套下可收集 **5 个用例**；collection 不是实际执行，不能计为硬件通过。
 
@@ -483,7 +483,6 @@ main 已将 E2E 公共逻辑迁移到 `tests/e2e/common/rlhf/weight_transfer/`�
 
 这些机制探针错误与前述 CPU UT 的 179 passed 并不矛盾：CPU 假件不能验证实际设备时序。此结果不能外推为所有真实模型 E2E 一定失败，也不能证明真实多进程 IPC 已发生相同问题；它已经足以说明“继承 vLLM 循环”不能作为当前 Ascend 跨 chunk 问题已解决的依据。
 
-测试 留档：`/path/to/artifact`、`unpack-control.json`；测试脚本为同目录 `probe_unpack_usage.py`、`probe_unpack_control.py`。
 
 ### 5.5 当前方案与后续候选
 
