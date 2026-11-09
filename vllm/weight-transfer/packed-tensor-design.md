@@ -1,6 +1,6 @@
 # Packed tensor 方法、流程与复用设计
 
-文档版本：**v1.0.4**。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+文档版本：**v1.0.5**。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 1. 阅读基准与方法清单
 
@@ -74,11 +74,12 @@
 | 图 3A / 3B：HCCL 收发时序 | 打包、native 通信、解包和 loader 的提交顺序及等待位置 | 3.4～3.5 |
 | 图 4：IPC 收发时序 | 共享 buffer 的发布、重建、消费与下一次覆盖 | 3.6、3.10 |
 | 图 5：存储与生命周期 | view、clone、loader 引用与设备读取完成的区别 | 3.3、5.4 |
+| 图 6：UML 静态结构 | 模块操作、真实类、闭包及依赖关系，区分类继承与函数委托 | 2.8、3.1～3.5、3.10 |
 | 附图 A：异常清理 | drain、失败 storage 保留与异常优先级 | 附录 A |
 
 所有图描述第 1.1 节的固定源码，**不是拟议跨 chunk 修复方案**。图中 `[V]` 表示 vLLM 原实现，`[A]` 表示本 PR 的 Ascend packed 适配，`[E]` 表示既有引擎、worker 或模型代码，不在本 PR 修改。
 
-packed 层用的是**函数委托和包装**，图中连线不是 UML 类继承。引擎类继承沿用 main；本 PR 不改变引擎建组、RPC 协议或 loader 实现，不再展开背景类图。
+packed 层用的是**函数委托和包装**，其结构在第 2.8 节 UML 图中以依赖箭头表示，不是类继承。引擎类继承沿用 main；本 PR 不改变引擎建组、RPC 协议或 loader 实现，不再展开背景类图。
 
 术语按一方分别命名：
 
@@ -328,6 +329,75 @@ flowchart TB
 | owning clone storage | 返回 tensor 的 view、loader 暂存引用 | clone 完成后才能读取；所有异步读结束后才能回收复用 | 独立存储与对齐已保留；未增加 clone 的跨 stream event / record_stream |
 
 **独立存储、数据就绪和生命周期是三个条件。** clone 保证不再别名原 buffer，但 clone 的提交不是完成证明；loader 持有 Python 引用可延长 storage 存活，却不能代替跨 stream 依赖；引用释放后仍可能有设备读在运行。图 5 的虚线只标记未解决风险，不能作为本 PR 已修复该问题的证据。
+
+### 2.8 图 6：UML 静态结构与复用边界
+
+本图采用 UML 类图记法展示模块、实际类和闭包。`«module»` 方框中的操作是 Python **模块函数**，不是某个虚构父类的方法；这里只列出本次实际使用的 vLLM 成员。模块函数省略参数，签名和行为见第 3 章。`«closure»` 是安装 hook 时生成的局部函数，也不是新增类。
+
+```mermaid
+classDiagram
+    direction TB
+    class AscendPacked["Ascend packed_tensor.py"] {
+        <<module>>
+        +packed_broadcast_producer()
+        +packed_broadcast_consumer()
+        +packed_npu_ipc_producer()
+        +packed_npu_ipc_consumer()
+        -_hccl_group()
+        -_checked_callback()
+        -_install_owning_unpack()
+        -_drain_packed_streams()
+    }
+    class VllmPacked["vLLM packed_tensor.py"] {
+        <<module>>
+        +packed_nccl_broadcast_producer()
+        +packed_nccl_broadcast_consumer()
+        +pack_tensors()
+        +unpack_tensor()
+        -_get_streams()
+    }
+    class HCCLGroup["_HCCLPackedGroup"] {
+        +group
+        +streams
+        +buffers
+        +__init__(group, streams)
+        +broadcast(tensor, src)
+    }
+    class Chunk["PackedChunk"] {
+        <<dataclass>>
+        +packed_tensor
+        +names
+        +shapes
+        +dtypes
+        +tensor_sizes
+    }
+    class Owning["owning_unpack"] {
+        <<closure>>
+        unpack : captured original function
+        +owning_unpack(packed, names, shapes, dtypes, sizes)
+    }
+    AscendPacked ..> VllmPacked : 委托广播入口并调用原实现
+    AscendPacked ..> HCCLGroup : 创建并传给原广播循环
+    VllmPacked ..> HCCLGroup : 运行时调用传入对象的 broadcast
+    VllmPacked ..> Chunk : pack_tensors 创建 / producer 持有
+    AscendPacked ..> Owning : 幂等创建并安装到模块符号
+    VllmPacked ..> Owning : 安装后经 unpack_tensor 符号调用
+    Owning ..> VllmPacked : 调用闭包保存的原 unpack 函数
+```
+
+图 6 的虚线箭头是 UML **依赖/使用**关系，不是时序图的“返回”。图中没有空心三角继承箭头，因为当前 packed 层没有新增父子类关系；也没有将 `_HCCLPackedGroup` 画成 NCCL communicator 的子类，它只通过 `broadcast` 方法满足循环的调用接口。
+
+| 图中关系 | 实际代码及复用方式 | 不应误读为 |
+| --- | --- | --- |
+| Ascend 模块 → vLLM 模块 | 两个广播入口直接调用 `upstream.packed_nccl_broadcast_*`；IPC consumer 调安装后的 `upstream.unpack_tensor` | Ascend 模块继承了一个 PackedTensor 基类 |
+| vLLM 模块 → `_HCCLPackedGroup` | 函数参数 `group` 接收到包装对象，循环运行时调用其 broadcast | vLLM 源码导入了 Ascend 类，或实际使用 NCCL 通信 |
+| vLLM 模块 → `PackedChunk` | 原 `pack_tensors` 创建数据对象，原 producer 用 in_flight 持有 | Ascend 另写了 PackedChunk 子类或转换副本 |
+| Ascend 模块 → owning 闭包 | `_install_owning_unpack` 捕获原函数，替换 vLLM 模块的 unpack_tensor 属性 | 改写安装目录下的 vLLM 源文件 |
+| owning 闭包 → vLLM 原 unpack | 每段 clone 后用单 tensor metadata 调用捕获的原函数 | 再调用已替换的同名模块符号，导致递归 |
+
+模块操作前的 `+ / -` 仅区分公开入口与下划线内部 helper；Python 不因此增加访问控制。图里的 `unpack : captured original function` 是闭包捕获引用，不是源码新增的类属性。
+
+**没有复用的部分：** vLLM 的 `packed_ipc_producer`、`packed_ipc_consumer`、`PackedBufferImporter` 和 `PackedIpcChunk` 没有进入当前 NPU IPC 路径，不画成 Ascend 的父类或已复用组件。NPU IPC 的本地分包、句柄重建和 metadata 校验仍在 Ascend 模块内。已有 engine 类继承关系不属于本 PR 的 packed 重构，图 6 不展开。
 
 ## 3. 按方法详细对照与复用方案
 

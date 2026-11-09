@@ -1,6 +1,6 @@
 # Weight transfer 设计文档
 
-- [Packed tensor 方法、流程与复用设计](packed-tensor-design.md)：当前版本 **v1.0.4**。
+- [Packed tensor 方法、流程与复用设计](packed-tensor-design.md)：当前版本 **v1.0.5**。
 - [文档版本记录](CHANGELOG.md)：记录每次修改的版本及内容。
 
 ## 版本维护约定

@@ -1,5 +1,12 @@
 # Packed tensor 文档版本记录
 
+## v1.0.5
+
+- 增加 UML 静态结构图，列出两侧模块函数、PackedChunk、HCCL 通信包装类和 owning-unpack 闭包。
+- 标明直接委托、运行时接口依赖、模块 hook 与原函数调用，说明没有新增 packed 类继承。
+- 明确未复用的 vLLM IPC 方法和 importer；保留 v1.0.4 独立脱敏 Markdown。
+- 仅修改文档，源码与测试结论不变。
+
 ## v1.0.4
 
 - 增加重构前后结构图、函数复用关系图、HCCL 发送与接收时序图、IPC 时序图、存储生命周期图及异常清理附图。
