@@ -1,8 +1,6 @@
 # Packed tensor 方法、流程与复用设计
 
-文档版本：**v1.0.1（阶段草稿归档）**。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
-
-本版归档引入 V2 wrapper 时的本地阶段状态；后续版本将按已提交代码重新同步。
+文档版本：**v1.0.2**。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 1. 阅读基准与方法清单
 
@@ -13,15 +11,15 @@
 | 对象 | 基准 | 用途 |
 | --- | --- | --- |
 | vLLM main 配套 | `24420b7a341af37a9bc3186e6fc6062512e0aa58` | 主要流程说明 |
-| vLLM v0.32.0 | `5df63a7203cdb9328d824a27b682e77c7b9928be` | 双版本差异说明 |
-| Ascend main 原实现 | `3be5bbe32a9e4b6cd319eeee4a2c545f7728b106` | 识别必须保留的原有功能 |
-| Ascend 当前重构实现 | `packed-vllm-loop-reuse`，HEAD `c2d66e163` 加未提交工作区修改 | 本文“当前 Ascend 流程”的主体 |
+| vLLM v0.33.0 | `4ba787ec9959e566d3b587a796dff07673324da5` | 双版本差异说明 |
+| Ascend main 原实现 | `37854b83ed4c91f90dc609d62d1e90e351005315` | 识别必须保留的原有功能 |
+| Ascend 当前重构实现 | `packed-vllm-loop-reuse`，已提交并推送 `e5b128e355ef8b88fad4031bdcab28beb1035157` | 本文“当前 Ascend 流程”的主体 |
 
-“当前 Ascend”不是说这些工作区修改已经推送。本文描述的状态是：HCCL 调用 vLLM 原循环；NPU IPC producer/consumer 已恢复为 Ascend main 原样；没有新增跨 chunk callback event 或额外 record_stream 修复。
+“当前 Ascend”以已推送的 e5b128e35 为准：HCCL 调用 vLLM 原循环；IPC 保留本地固定容量分包、NPU 句柄校验与重建，但共用 `_checked_callback` 和安装后的 owning-unpack。没有新增跨 chunk callback event 或额外 record_stream 修复；这不表示跨 chunk 问题已经解决。
 
-主要源码：[vLLM 配套 packed_tensor.py](https://github.com/vllm-project/vllm/blob/24420b7a341af37a9bc3186e6fc6062512e0aa58/vllm/distributed/weight_transfer/packed_tensor.py)、[vLLM v0.32.0 对应文件](https://github.com/vllm-project/vllm/blob/5df63a7203cdb9328d824a27b682e77c7b9928be/vllm/distributed/weight_transfer/packed_tensor.py)、[Ascend main 原文件](https://github.com/vllm-project/vllm-ascend/blob/3be5bbe32a9e4b6cd319eeee4a2c545f7728b106/vllm_ascend/distributed/weight_transfer/packed_tensor.py)。
+主要源码：[vLLM 配套 packed_tensor.py](https://github.com/vllm-project/vllm/blob/24420b7a341af37a9bc3186e6fc6062512e0aa58/vllm/distributed/weight_transfer/packed_tensor.py)、[vLLM v0.33.0 对应文件](https://github.com/vllm-project/vllm/blob/4ba787ec9959e566d3b587a796dff07673324da5/vllm/distributed/weight_transfer/packed_tensor.py)、[Ascend main 原文件](https://github.com/vllm-project/vllm-ascend/blob/37854b83ed4c91f90dc609d62d1e90e351005315/vllm_ascend/distributed/weight_transfer/packed_tensor.py)。
 
-vLLM 和 Ascend main 的源码链接均固定到 commit。当前重构部分按上述本地工作区状态记录，不等同于远端分支 HEAD。本文不依赖原工作目录中的源码快照文件。
+源码链接均固定到 commit。[当前 Ascend 实现](https://github.com/Liccol/vllm-ascend/blob/e5b128e355ef8b88fad4031bdcab28beb1035157/vllm_ascend/distributed/weight_transfer/packed_tensor.py)是本版逐方法对照的依据。v0.32.0 仅属于历史验证，不再是本版当前 release 配套。
 
 ### 1.2 vLLM 文件中有哪些方法
 
@@ -31,7 +29,7 @@ vLLM 和 Ascend main 的源码链接均固定到 commit。当前重构部分按�
 | --- | --- | --- | --- |
 | `_get_streams(device_idx, num_buffers)` | 广播发送/接收两方分别调用 | 缓存本进程指定设备的 stream 元组 | 原函数直接使用 |
 | `pack_tensors(...)` | 广播发送方 | 迭代参数、预处理、字节化、组成一个 chunk | 原 producer 内部直接使用 |
-| `unpack_tensor(...)` | 广播接收方、IPC 接收方 | 字节切分并恢复 dtype/shape，通常返回 views | HCCL 适配后调用；NPU IPC 当前本地解包 |
+| `unpack_tensor(...)` | 广播接收方、IPC 接收方 | 字节切分并恢复 dtype/shape，通常返回 views | HCCL 与 NPU IPC 共用 owning-unpack，再调用保存的 vLLM 原函数 |
 | `packed_nccl_broadcast_producer(...)` | trainer | 发送 slot 轮转、打包和广播 | `packed_broadcast_producer` |
 | `packed_nccl_broadcast_consumer(...)` | worker | 接收 slot 轮转、接收、解包、调用模型 loader | `packed_broadcast_consumer` |
 | `packed_ipc_producer(...)` | trainer | 复用一块 IPC buffer，分块写入并产出句柄和 metadata | `packed_npu_ipc_producer` |
@@ -166,7 +164,7 @@ HCCL 复用迭代、线性化、metadata、cat 和阈值规则；本地保留预
 
 main 原 HCCL consumer 和 NPU IPC consumer 都先 clone 字节切片，再恢复 dtype/shape，保证独立 storage，也能处理混合 dtype 的未对齐 offset。
 
-当前重构在 `_install_owning_unpack` 中保存 vLLM 原 unpack，安装 owning-unpack 分派：先 split，每段 clone，再将单 tensor metadata 交给保存的 vLLM 原函数恢复 dtype/shape。HCCL 原循环调用该分派。NPU IPC 已恢复 main 本地实现，仍按 offset 切片、clone、view/reshape；没有调用这套 hook。
+当前 `_install_owning_unpack` 保存 vLLM 原 unpack，并幂等安装 owning-unpack 分派：先 split，每段 clone，再将单 tensor metadata 交给保存的原函数恢复 dtype/shape。HCCL 原循环调用这个分派；IPC consumer 在完成原有校验和 NPU rebuild 后也调用 `_install_owning_unpack()`，再调用 `upstream.unpack_tensor(...)`，不再维护另一套 offset 解包循环。IPC 单独调用无需等待 HCCL 先执行。
 
 **差异**
 
@@ -174,13 +172,13 @@ main 原 HCCL consumer 和 NPU IPC consumer 都先 clone 字节切片，再恢�
 
 **继承/复用方案**
 
-不能直接返回原 vLLM views。当前保留字节 clone，再调用原 unpack。下一步可评估将 owning-unpack 提成同文件公共 helper，供 HCCL 和 IPC 共用；这只是方案，尚未实施。
+为保持 main 既有独立存储契约，当前保留字节 clone，再调用原 unpack。HCCL 与 IPC 共用同一个安装后的 unpack 已在 e5b128e35 落地，没有新增独立 helper 文件。HCCL 原生 views 路线是后续候选，会改变该契约，尚未采用。
 
 **复用内容与保留边界**
 
 复用 dtype/shape 恢复实现；保留独立存储和字节对齐。每 tensor 多一次原函数调用的成本尚未做硬件评估。这个兼容层不引入 callback 完成 event 或额外 record_stream，也不代表跨 chunk 时序问题已解决。
 
-注意：hook 替换的是 vLLM packed 模块的 unpack 符号；若该模块其他函数随后查找这个符号，也会看到 owning 行为。它不是仅对某次 HCCL 调用生效的局部分派。当前 NPU IPC 本地函数不查这个符号。
+注意：hook 替换的是 vLLM packed 模块的 unpack 符号，安装后持续生效；该模块其他函数随后查找该符号也会看到 owning 行为。当前 NPU IPC consumer 也显式调用该符号。hook 不安装 stream/event 依赖，只负责返回独立存储。
 
 ### 3.4 `packed_nccl_broadcast_producer` → `packed_broadcast_producer`
 
@@ -225,7 +223,7 @@ main 配套的顺序为：
 6. 调用 unpack_tensor，再调用 worker 提供的 post_unpack_func。
 7. callback 提交后记录当前 slot_done event，轮转 slot；EOF 处理剩余 metadata，最后 drain 全部 streams。
 
-v0.32.0 没有上述 receive-ready event 链、raw buffer 跨 stream 记录和 slot_done event；其循环在复用 slot 前直接 synchronize，对每 slot 保存 packed tensor 引用。分包和解包接口一致。
+v0.33.0 已有 receive-ready event 链和 raw buffer 的 record_stream，但没有 main 的 slot_done 完成 event；复用 slot 前仍直接 synchronize。当前两套配套的 packed 模块 AST 对比只有该 consumer 不同，其他函数和类一致。v0.32.0 没有这些接收保护，属于历史版本，不与 v0.33.0 混淆。
 
 **当前 Ascend 流程**
 
@@ -253,11 +251,11 @@ main 原实现本地累加 metadata、分配、广播、clone 解包、调用 lo
 4. 调用方消费完成、恢复 generator 后，重置 metadata，将新 tensor 拷入同一 buffer。
 5. EOF 时若 total_bytes 非零，同步并 yield 最后一块。
 
-main 配套同步使用 torch.accelerator.current_stream；v0.32.0 使用 torch.cuda.current_stream。这是此方法的版本差异，分包与全空判断相同。
+当前 main 配套与 v0.33.0 的此方法一致，均使用 torch.accelerator.current_stream 同步，且都以 total_bytes 判断最后一块。历史 v0.32.0 使用 torch.cuda.current_stream，不代表当前 release 行为。
 
 **当前 Ascend 流程**
 
-当前函数已恢复 main 原样：分配 NPU buffer、导出一次句柄、校验 callback 的 dtype/numel、检查固定容量、分块 copy、同步 NPU stream，yield 现有 dict 协议。EOF 使用 `if names`，因此全零元素参数仍产出 metadata。
+当前保留 main 的 NPU buffer 分配、一次句柄导出、固定容量分包、copy、stream 同步及 dict 协议。循环前只构造一次 `checked = _checked_callback(post_iter_func)`，各参数通过 checked 完成 Tensor/dtype/numel 检查，再 contiguous/reshape/view(uint8)。EOF 仍为 `if names`，全零元素参数 metadata 不丢失。
 
 **差异**
 
@@ -269,7 +267,7 @@ main 配套同步使用 torch.accelerator.current_stream；v0.32.0 使用 torch.
 
 **复用内容与保留边界**
 
-目前整个 producer 保持本地。可选的局部共享是 callback 结果验证；连续化与字节化仅几行，不建议单独拆文件。将来 vLLM 提供 device/export 扩展点且全空语义一致后，再评估原 generator 复用。
+producer 主循环仍本地维护，callback 结果验证已与 HCCL 共用。连续化和字节化不另拆文件；容量校验、metadata、全空语义和同步不变。将来 vLLM 提供 device/export 扩展点且全空语义一致后，再评估整个 generator 的委托。
 
 ### 3.7 `PackedBufferImporter.__init__`
 
@@ -347,17 +345,17 @@ rebuild API 写死 CUDA；NPU 的 export/release 语义不能仅凭 CUDA 的泄�
 4. 按 sum(tensor_sizes) 截取有效 buffer，转换 dtype_names。
 5. 调用 unpack_tensor，对结果逐个 clone，返回独立 tensors。
 
-其 importer 参数允许复用同一次 export 的映射；临时 importer 仅适合单 chunk 语义。当前配套和 v0.32.0 的此方法一致。
+其 importer 参数允许复用同一次 export 的映射；临时 importer 仅适合单 chunk 语义。当前配套和 v0.33.0 的此方法一致。
 
 **当前 Ascend 流程**
 
-当前函数已恢复 main 原样：
+当前函数保留 main 的 NPU 边界，最后一段解包已共享：
 
 1. 从调用方接收 physical_npu_id，而不是查询 CUDA properties。
 2. 校验 device_index、UUID、dtype、metadata 长度、shape、byte size 和句柄长度。
 3. 选择 NPU 句柄，修正接收 device index，调用 rebuild_npu_tensor。
 4. 检查声明的有效字节数不超过实际 buffer，再截取有效区域。
-5. 本地按 offset 取字节切片，先 clone，再 view(dtype)/reshape(shape)，返回结果。
+5. 调用 `_install_owning_unpack()`，再由 `upstream.unpack_tensor(...)` 执行共享的字节 clone → 原 vLLM dtype/shape 恢复，返回结果。
 
 **差异**
 
@@ -365,7 +363,7 @@ rebuild API 写死 CUDA；NPU 的 export/release 语义不能仅凭 CUDA 的泄�
 
 **继承/复用方案**
 
-不整体调用 CUDA consumer。将其分为“校验、NPU 重建、公共解包”三个部分，前两部分本地保留；最后一部分可与 HCCL 的 owning-unpack 共享。后者是下一步可讨论方案，当前代码尚未实施。
+不整体调用 CUDA consumer。保留“校验、NPU 重建”两部分，公共解包已与 HCCL 共用。原 metadata 校验和 rebuild 顺序未变，没有新增 importer 缓存或修改跨进程协议。
 
 **复用内容与保留边界**
 
@@ -408,22 +406,22 @@ HCCL 数据结构和常量直接用；IPC 暂不为了结构统一额外做 data
 
 按 NPU-only 进程约束，当前直接复用 `vllm_ascend.worker.v2.utils.torch_cuda_wrapper()`；删除 packed 自己的两个 API 代理类，不再替换 vLLM packed 模块的 torch 引用。现有 wrapper 会替换进程级 torch.cuda 的 stream/event/graph 等属性，退出 with 后不恢复；这是接受的既有行为，不是局部临时替换。独立 trainer 通过 packed 入口同样安装该适配。此前为 IPC 复用尝试的 empty 重定向和 reduce_tensor hook 仍不保留。
 
-### 4.2 建议的公共工具关系：尚未实施
+### 4.2 已落地的公共工具关系
 
 ```mermaid
 flowchart TD
     A[hccl_engine] --> B[本地广播入口]
     B --> C[vLLM 原 producer / consumer]
-    C --> D[本地 owning-unpack 公共 helper]
+    C --> D[安装后的 owning-unpack 分派]
     E[npu_ipc_engine] --> F[本地 NPU IPC consumer]
     F --> G[NPU 校验与 rebuild]
     G --> D
     D --> H[保存的 vLLM 原 unpack：dtype / shape 恢复]
 ```
 
-建议将 owning-unpack 作为现有 Ascend packed_tensor.py 内的 helper，不新建 adapter/utils 文件。HCCL 安装的 unpack hook 与 NPU IPC consumer 都调用它；需保证 helper 调用的是保存的 vLLM 原函数，不能再通过被替换后的同名符号递归调用自己。
+公共解包位于现有 Ascend packed_tensor.py：`_install_owning_unpack` 保存原函数并安装分派，HCCL 原 consumer 和 NPU IPC consumer 都通过模块符号调用它。分派内部调用保存的原 unpack，不递归调用已经替换的同名符号。没有新增 adapter/utils 文件。
 
-callback 结果验证也可以小范围共用 `_checked_callback`，但只有在减少重复且不改变 iterator 时机、错误信息和 callback 次数时才值得做。不能为了形式统一重写 IPC 循环。
+callback 结果验证也已共用 `_checked_callback`，IPC 仅在循环外创建一次 wrapper，各参数仍调用一次用户 callback。本次共享净减少 15 行（+4/-19），没有改动分包、句柄重建、同步及异常清理。
 
 不要从 packed_tensor.py 反向导入 npu_ipc_engine.py 的 npu_generate_uuid：engine 已导入 packed，容易形成循环依赖；physical_npu_id 当前由调用方传入即可。
 
@@ -441,7 +439,7 @@ callback 结果验证也可以小范围共用 `_checked_callback`，但只有在
 
 ### 5.1 代码与维护成本
 
-main 原 packed 文件 449 行；V2 wrapper 复用前的 HCCL 复用、IPC 本地版本为 352 行；当前删除代理后为 339 行。此前 HCCL+IPC 都复用且补兼容的实验约 312 行：IPC 额外省约 40 行级别，但带来设备分配、reduce 转发、全空输入特殊路径与协议转换。因此已恢复 IPC 主体，下一步只评估解包工具层共享。
+main 原 packed 文件为 449 行；引入既有 V2 wrapper 后为 339 行；当前 e5b128e35 共享 IPC 解包与校验后为 324 行。此前将 IPC 整个发送循环委托并补兼容的实验约 312 行，但需要分配重定向、reduce 转发、全空前缀特殊路径和协议转换，已撤回。当前只共享通用解包和校验，不强行套用整条 CUDA IPC 路径。
 
 行数不是唯一指标：原循环和分包 bugfix 能随配套更新进入执行路径，是 HCCL 复用的主要收益；私有函数、module hook 和每 tensor 原函数调用则是本地仍需检视的成本。不能声称所有未来修改都零适配。
 
@@ -455,10 +453,47 @@ main 原 packed 文件 449 行；V2 wrapper 复用前的 HCCL 复用、IPC 本�
 
 这些是 main 已有契约，并非本轮另做跨 chunk 修复。新增 callback event 或跨 stream reader 生命周期方案仍不在范围内。
 
-### 5.3 已有验证与未完成项
+### 5.3 CPU 回归与测试目录
 
-本轮代码此前在两套配套的 CPU weight-transfer UT 均为 **179 passed、无 xfail、退出码 0**；main 原有测试函数全部保留。IPC 两个函数源码与 Ascend main 一致。本轮测试包括 weight-transfer 单测和现有 `tests/ut/worker/v2/test_v2_utils.py`；weight-transfer 为 178 项，V2 wrapper 为 1 项。日志：测试 的 `/path/to/artifact`、`v2-wrapper-vllm-v032.log`。本轮没有验证新发布的 v0.33.0 配套。
+当前 main 配套 24420b7a 与 v0.33.0 4ba787ec 的 CPU 回归均为 **179 passed、无 xfail、退出码 0**。其中 weight-transfer 为 178 项，另有既有 V2 wrapper 用例 1 项。main 原有测试函数均保留。
 
-Ruff/diff 检查通过；当前重构形态尚未完成真实 NPU、IPC 多进程或模型 E2E 验收。此前另一个跨 chunk 修复形态的硬件通过结果不能移作本形态证据。
+IPC 共享改动还单独运行了一个全新进程的 IPC 未对齐解包用例，**1 passed**，验证 IPC 不依赖 HCCL 先调用。测试 留档：`/path/to/artifact`、`v033-ut.log`、`standalone-ipc.log`、`summary.json`；该 summary 中代码文件 SHA-256 与当前本地工作树核对一致。
 
-本地已改为复用 V2 wrapper，但没有实施 4.2 的公共 helper。代码与本版文档均未提交、未推送，等待本地评审；远端文档仍为 v1.0.0。
+main 已将 E2E 公共逻辑迁移到 `tests/e2e/common/rlhf/weight_transfer/`，入口在 `tests/e2e/pull_request/two_card/rlhf/weight_transfer/` 下的 HCCL/IPC 目录。新目录在 main 配套下可收集 **5 个用例**；collection 不是实际执行，不能计为硬件通过。
+
+修改文件 Ruff 和 diff 检查通过。全量 format.sh ci 已尝试：actionlint 按约定跳过，另 5 项检查受 Windows 的 /bin/bash、shellcheck 或路径环境限制，没有宣称全量检查通过。
+
+### 5.4 NPU 解包完整性与跨 chunk 边界
+
+在测试 NPU 上，对与 e5b128e35 相同的代码做了小规模探针。这里使用真实 NPU tensor、算子、stream、event 和 allocator；HCCL 广播由同 stream 的 copy 模拟，未执行真实 HCCL collective、完整模型 E2E 或多进程 IPC。
+
+| 验证场景 | 当前代码 | 仅测试进程增加 event + clone record_stream 的对照 |
+| --- | --- | --- |
+| 混合 dtype、标量、零元素；覆盖并释放原 buffer 后核对解包值、形状、dtype 和数量 | 20/20 轮通过 | 未重复该项 |
+| 前一个 chunk 的 owning clone 延迟，后一 slot 读取 | 10/10 轮数据错误 | 10/10 轮通过 |
+| 引用释放后，其他 slot 分配并覆盖相同大小的 storage | 10/10 轮数据错误；每轮观察到 4 或 6 次危险地址复用 | 10/10 轮通过，危险复用为 0 |
+
+后两项覆盖 2/3 个 slots，各 5 轮。对照仅在测试进程中增加“前一 callback 后记录 event、后一 unpack 等待”和“clone 记录 reader streams”，没有写入当前生产代码。
+
+因此必须区分：
+
+- 独立存储成立：原 packed buffer 被覆盖，不会改变已经完成的 clone。
+- 异步读取安全尚不成立：vLLM 的 receive-ready event 和 raw buffer record_stream 保护的是 raw storage，不自动覆盖随后创建的 clone。
+- Python loader 保留引用也不等于设备已读完。当前 layerwise 会把参数 bound_args 存入 loaded_weights，重放提交设备操作后 reset 释放引用；跨 stream 就绪及释放后异步读取仍需正确依赖。
+
+这些机制探针错误与前述 CPU UT 的 179 passed 并不矛盾：CPU 假件不能验证实际设备时序。此结果不能外推为所有真实模型 E2E 一定失败，也不能证明真实多进程 IPC 已发生相同问题；它已经足以说明“继承 vLLM 循环”不能作为当前 Ascend 跨 chunk 问题已解决的依据。
+
+测试 留档：`/path/to/artifact`、`unpack-control.json`；测试脚本为同目录 `probe_unpack_usage.py`、`probe_unpack_control.py`。
+
+### 5.5 当前方案与后续候选
+
+| 内容 | 当前状态 | 后续讨论边界 |
+| --- | --- | --- |
+| HCCL/IPC 公共 owning-unpack | 已落地 | 保持 main 既有独立存储和对齐功能，不宣称时序修复完成 |
+| IPC producer 公共校验 | 已落地 | 不扩展到整个 IPC 发送循环 |
+| HCCL 原生 views | 未采用 | 有望直接使用 vLLM 对 raw buffer 的保护，但会改变独立存储契约；需处理对齐并验证实际 loader 及派生计算 |
+| HCCL 正常退出 drain 委托 | 未调整 | 可评估正常路径是否重复同步；异常存储保护继续保留，未获验证前不删 native 通信完成边界 |
+| IPC metadata 数据结构 | 未调整 | 仅在确实减少维护成本时考虑 PackedIpcChunk，不改变现有字典协议 |
+| IPC importer 缓存 | 不在本次复用范围 | 保持独立问题和独立修复，不混入当前 PR |
+
+本版描述的代码已在 Liccol/vllm-ascend 的 packed-vllm-loop-reuse 分支推送至 e5b128e35。当前 PR 只做复用和既有行为兼容，不包含测试对照中的新增跨 chunk event/record_stream 保护。
