@@ -1,6 +1,8 @@
 # Packed tensor 方法、流程与复用设计
 
-文档版本：**v1.0.0**。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+文档版本：**v1.0.1（阶段草稿归档）**。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+
+本版归档引入 V2 wrapper 时的本地阶段状态；后续版本将按已提交代码重新同步。
 
 ## 1. 阅读基准与方法清单
 
@@ -112,7 +114,7 @@ IPC producer 的 generator 只产出数据描述，不会自己调度 worker RPC
 
 **当前 Ascend 流程**
 
-main 原实现每次 producer/consumer 调用新建 NPU streams。当前重构先在 `_hccl_group` 中调用 vLLM 原缓存函数，登记本次清理所需 streams；随后 vLLM 循环也取同一个缓存元组。模块内 API 代理让 Stream 创建走 NPU。
+main 原实现每次 producer/consumer 调用新建 NPU streams。当前重构先在 `_hccl_group` 中调用 vLLM 原缓存函数，登记本次清理所需 streams；随后 vLLM 循环也取同一个缓存元组。`_hccl_group` 使用既有 V2 `torch_cuda_wrapper()`，让 Stream 创建走 NPU。
 
 **差异**
 
@@ -164,7 +166,7 @@ HCCL 复用迭代、线性化、metadata、cat 和阈值规则；本地保留预
 
 main 原 HCCL consumer 和 NPU IPC consumer 都先 clone 字节切片，再恢复 dtype/shape，保证独立 storage，也能处理混合 dtype 的未对齐 offset。
 
-当前重构在 `_install_packed_apis` 中保存 vLLM 原 unpack，安装 owning-unpack 分派：先 split，每段 clone，再将单 tensor metadata 交给保存的 vLLM 原函数恢复 dtype/shape。HCCL 原循环调用该分派。NPU IPC 已恢复 main 本地实现，仍按 offset 切片、clone、view/reshape；没有调用这套 hook。
+当前重构在 `_install_owning_unpack` 中保存 vLLM 原 unpack，安装 owning-unpack 分派：先 split，每段 clone，再将单 tensor metadata 交给保存的 vLLM 原函数恢复 dtype/shape。HCCL 原循环调用该分派。NPU IPC 已恢复 main 本地实现，仍按 offset 切片、clone、view/reshape；没有调用这套 hook。
 
 **差异**
 
@@ -193,7 +195,7 @@ main 原 HCCL consumer 和 NPU IPC consumer 都先 clone 字节切片，再恢�
 
 **当前 Ascend 流程**
 
-main 原实现本地维护取参数、打包、cat、slot 轮转和 finally。当前入口先校验配置、安装模块内 API 适配，进入 `_hccl_group`，再直接调用原 vLLM producer。传入的 group 是 `_HCCLPackedGroup`，其 broadcast 调用真实 PyHcclCommunicator，并显式传入当前 NPU stream。
+main 原实现本地维护取参数、打包、cat、slot 轮转和 finally。当前入口先校验配置、安装 owning-unpack 适配，进入使用既有 V2 wrapper 的 `_hccl_group`，再直接调用原 vLLM producer。传入的 group 是 `_HCCLPackedGroup`，其 broadcast 调用真实 PyHcclCommunicator，并显式传入当前 NPU stream。
 
 本地包装器登记每 slot 最后一个通信 buffer，在 native HCCL 前后同步；contextmanager 在退出时执行 main 已有的 `_drain_packed_streams`。
 
@@ -397,14 +399,14 @@ HCCL 数据结构和常量直接用；IPC 暂不为了结构统一额外做 data
 
 | 文件 | 当前职责 | 本轮是否修改 |
 | --- | --- | --- |
-| vLLM `distributed/weight_transfer/packed_tensor.py` | 原打包、广播循环、stream 缓存、解包、CUDA IPC 工具 | 不改安装源码；运行时仅在本模块安装 NPU API/owning-unpack 适配 |
+| vLLM `distributed/weight_transfer/packed_tensor.py` | 原打包、广播循环、stream 缓存、解包、CUDA IPC 工具 | 不改安装源码；本模块安装 owning-unpack，设备 API 使用既有 V2 wrapper |
 | Ascend `distributed/weight_transfer/packed_tensor.py` | HCCL 薄入口和设备边界、原清理保障、本地 NPU IPC | 修改 |
 | Ascend `distributed/weight_transfer/hccl_engine.py` | 建组、更新编排、调用本地广播入口 | 保持 main 原样，包括注释 |
 | Ascend `distributed/weight_transfer/npu_ipc_engine.py` | 生成 NPU 身份、IPC engine 编排、调用本地 IPC 入口 | 保持 main 原样 |
-| Ascend 平台 patch 文件 | 平台其他兼容 | 保持 main 原样，不添加进程级 stream alias |
+| Ascend 平台 patch 文件、worker/v2/utils.py | 平台兼容与现有 CUDA→NPU wrapper | 文件保持 main 原样；仅从 packed 入口调用现有 wrapper |
 | `tests/ut/distributed/weight_transfer/test_packed_tensor.py` | 既有契约回归和模块作用域检查 | 修改 |
 
-模块内 torch 代理只覆盖 Stream/stream/current_stream 三个 CUDA stream 属性；其他属性委托真实 torch。真实 torch.cuda 不被改写。此前为 IPC 复用尝试的 empty(device="cuda") 重定向和 reduce_tensor hook 已删除。
+按 NPU-only 进程约束，当前直接复用 `vllm_ascend.worker.v2.utils.torch_cuda_wrapper()`；删除 packed 自己的两个 API 代理类，不再替换 vLLM packed 模块的 torch 引用。现有 wrapper 会替换进程级 torch.cuda 的 stream/event/graph 等属性，退出 with 后不恢复；这是接受的既有行为，不是局部临时替换。独立 trainer 通过 packed 入口同样安装该适配。此前为 IPC 复用尝试的 empty 重定向和 reduce_tensor hook 仍不保留。
 
 ### 4.2 建议的公共工具关系：尚未实施
 
@@ -439,7 +441,7 @@ callback 结果验证也可以小范围共用 `_checked_callback`，但只有在
 
 ### 5.1 代码与维护成本
 
-main 原 packed 文件 449 行；当前 HCCL 复用、IPC 本地版本 352 行。此前 HCCL+IPC 都复用且补兼容的实验约 312 行：IPC 额外省约 40 行级别，但带来设备分配、reduce 转发、全空输入特殊路径与协议转换。因此已恢复 IPC 主体，下一步只评估解包工具层共享。
+main 原 packed 文件 449 行；V2 wrapper 复用前的 HCCL 复用、IPC 本地版本为 352 行；当前删除代理后为 339 行。此前 HCCL+IPC 都复用且补兼容的实验约 312 行：IPC 额外省约 40 行级别，但带来设备分配、reduce 转发、全空输入特殊路径与协议转换。因此已恢复 IPC 主体，下一步只评估解包工具层共享。
 
 行数不是唯一指标：原循环和分包 bugfix 能随配套更新进入执行路径，是 HCCL 复用的主要收益；私有函数、module hook 和每 tensor 原函数调用则是本地仍需检视的成本。不能声称所有未来修改都零适配。
 
@@ -455,8 +457,8 @@ main 原 packed 文件 449 行；当前 HCCL 复用、IPC 本地版本 352 行�
 
 ### 5.3 已有验证与未完成项
 
-本轮代码此前在两套配套的 CPU weight-transfer UT 均为 **179 passed、无 xfail、退出码 0**；main 原有测试函数全部保留。IPC 两个函数源码与 Ascend main 一致。日志：测试 的 `/path/to/artifact`、`hccl-only-vllm-v032.log`。
+本轮代码此前在两套配套的 CPU weight-transfer UT 均为 **179 passed、无 xfail、退出码 0**；main 原有测试函数全部保留。IPC 两个函数源码与 Ascend main 一致。本轮测试包括 weight-transfer 单测和现有 `tests/ut/worker/v2/test_v2_utils.py`；weight-transfer 为 178 项，V2 wrapper 为 1 项。日志：测试 的 `/path/to/artifact`、`v2-wrapper-vllm-v032.log`。本轮没有验证新发布的 v0.33.0 配套。
 
 Ruff/diff 检查通过；当前重构形态尚未完成真实 NPU、IPC 多进程或模型 E2E 验收。此前另一个跨 chunk 修复形态的硬件通过结果不能移作本形态证据。
 
-本次只刷新文档，没有实施 4.2 的公共 helper，也没有修改、提交或推送生产代码。
+本地已改为复用 V2 wrapper，但没有实施 4.2 的公共 helper。代码与本版文档均未提交、未推送，等待本地评审；远端文档仍为 v1.0.0。
