@@ -1,5 +1,15 @@
 # Packed tensor 文档版本记录
 
+## v1.0.7
+
+- 设计变更：删除 owning-unpack hook（进程级模块属性重绑定），独立存储改由 HCCL 侧 `_owning_post_unpack` 回调包装与 IPC 侧本地 clone 提供；先 unpack 得到 views、再逐项 clone，未对齐 offset 由原 unpack 的 contiguous 拷贝处理。
+- drain 委托：本地 finally 仅在异常路径执行，正常路径交给上游原 producer/consumer 的结尾 drain，消除重复同步。
+- stream 缓存键与上游统一为 `torch.accelerator.current_device_index`，消除与原循环键分叉导致第二套缓存 / `streams.index` 失败的隐患。
+- negative-shape 校验抽为 `_reject_negative_shape`，HCCL 与 IPC 共用。
+- 图 2A/2B、3A、3B、4、5、6、附图 A 按新实现重绘或修订；图 6A/6B 合并为单张图 6，删除随 hook 一并失效的符号重绑定状态图。
+- 5.4 机制表述修正：raw buffer 的 record_stream（含 caller stream）与 receive-ready 链在两套配套均已存在，保留的验证边界是 clone 的读序，而非“完全无保护”；探针基于 v1.0.6 hook 版本，合并前需按 773c8947e 重做真机最小用例。
+- 源码基准更新为 773c8947e；新增上游符号签名/正常 drain 护栏 UT、缓存键用例与 `_HCCLPackedGroup` 直接用例。保留 v1.0.6 独立 Markdown 快照。
+
 ## v1.0.6
 
 - 依据 e5b128e35 代码核对修正图 3A：finally drain 的发起者改为 `_hccl_group`，补充 group 包装登记每 slot 最后通信 buffer 的步骤，标注 EOF 正常 drain 与 finally drain 在正常路径重复同步。

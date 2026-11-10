@@ -1,6 +1,6 @@
 # Packed tensor 方法、流程与复用设计
 
-文档版本：**v1.0.6**。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+文档版本：**v1.0.7**。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 1. 阅读基准与方法清单
 
@@ -13,13 +13,13 @@
 | vLLM main 配套 | `24420b7a341af37a9bc3186e6fc6062512e0aa58` | 主要流程说明 |
 | vLLM v0.33.0 | `4ba787ec9959e566d3b587a796dff07673324da5` | 双版本差异说明 |
 | Ascend main 原实现 | `37854b83ed4c91f90dc609d62d1e90e351005315` | 识别必须保留的原有功能 |
-| Ascend 当前重构实现 | `packed-vllm-loop-reuse`，已提交并推送 `e5b128e355ef8b88fad4031bdcab28beb1035157` | 本文“当前 Ascend 流程”的主体 |
+| Ascend 当前重构实现 | `packed-vllm-loop-reuse`，已提交并推送 `773c8947eda1dc7c7586abdd4fd04ada056fa962` | 本文“当前 Ascend 流程”的主体 |
 
-“当前 Ascend”以已推送的 e5b128e35 为准：HCCL 调用 vLLM 原循环；IPC 保留本地固定容量分包、NPU 句柄校验与重建，但共用 `_checked_callback` 和安装后的 owning-unpack。没有新增跨 chunk callback event 或额外 record_stream 修复；这不表示跨 chunk 问题已经解决。
+“当前 Ascend”以已推送的 773c8947e 为准：HCCL 调用 vLLM 原循环；IPC 保留本地固定容量分包、NPU 句柄校验与重建，共用 `_checked_callback`；独立存储由 HCCL 侧的 `_owning_post_unpack` 回调包装和 IPC 侧的本地 clone 提供，**不再重绑定任何 vLLM 模块属性**。正常路径 drain 委托上游，仅失败路径执行本地保留清理。没有新增跨 chunk callback event 或额外 record_stream 修复；这不表示跨 chunk 问题已经解决。
 
 主要源码：[vLLM 配套 packed_tensor.py](https://github.com/vllm-project/vllm/blob/24420b7a341af37a9bc3186e6fc6062512e0aa58/vllm/distributed/weight_transfer/packed_tensor.py)、[vLLM v0.33.0 对应文件](https://github.com/vllm-project/vllm/blob/4ba787ec9959e566d3b587a796dff07673324da5/vllm/distributed/weight_transfer/packed_tensor.py)、[Ascend main 原文件](https://github.com/vllm-project/vllm-ascend/blob/37854b83ed4c91f90dc609d62d1e90e351005315/vllm_ascend/distributed/weight_transfer/packed_tensor.py)。
 
-源码链接均固定到 commit。[当前 Ascend 实现](https://github.com/Liccol/vllm-ascend/blob/e5b128e355ef8b88fad4031bdcab28beb1035157/vllm_ascend/distributed/weight_transfer/packed_tensor.py)是本版逐方法对照的依据。v0.32.0 仅属于历史验证，不再是本版当前 release 配套。
+源码链接均固定到 commit。[当前 Ascend 实现](https://github.com/Liccol/vllm-ascend/blob/773c8947eda1dc7c7586abdd4fd04ada056fa962/vllm_ascend/distributed/weight_transfer/packed_tensor.py)是本版逐方法对照的依据。v0.32.0 仅属于历史验证，不再是本版当前 release 配套。
 
 ### 1.2 vLLM 文件中有哪些方法
 
@@ -29,7 +29,7 @@
 | --- | --- | --- | --- |
 | `_get_streams(device_idx, num_buffers)` | 广播发送/接收两方分别调用 | 缓存本进程指定设备的 stream 元组 | 原函数直接使用 |
 | `pack_tensors(...)` | 广播发送方 | 迭代参数、预处理、字节化、组成一个 chunk | 原 producer 内部直接使用 |
-| `unpack_tensor(...)` | 广播接收方、IPC 接收方 | 字节切分并恢复 dtype/shape，通常返回 views | HCCL 与 NPU IPC 共用 owning-unpack，再调用保存的 vLLM 原函数 |
+| `unpack_tensor(...)` | 广播接收方、IPC 接收方 | 字节切分并恢复 dtype/shape，通常返回 views | HCCL 由 `_owning_post_unpack` 包装回调后 clone；IPC consumer 显式 clone |
 | `packed_nccl_broadcast_producer(...)` | trainer | 发送 slot 轮转、打包和广播 | `packed_broadcast_producer` |
 | `packed_nccl_broadcast_consumer(...)` | worker | 接收 slot 轮转、接收、解包、调用模型 loader | `packed_broadcast_consumer` |
 | `packed_ipc_producer(...)` | trainer | 复用一块 IPC buffer，分块写入并产出句柄和 metadata | `packed_npu_ipc_producer` |
@@ -70,11 +70,11 @@
 | 图 | 评审重点 | 对应详述 |
 | --- | --- | --- |
 | 图 1：重构前后结构 | 删除哪些重复代码，保留哪些硬件边界 | 第 4 章 |
-| 图 2A / 2B：函数复用与适配 | 直接委托、通信包装、模块 hook 分别在哪里 | 3.1～3.5、3.10 |
+| 图 2A / 2B：函数复用与适配 | 直接委托、通信包装、owning 回调包装分别在哪里 | 3.1～3.5、3.10 |
 | 图 3A / 3B：HCCL 收发时序 | 打包、native 通信、解包和 loader 的提交顺序及等待位置 | 3.4～3.5 |
 | 图 4：IPC 收发时序 | 共享 buffer 的发布、重建、消费与下一次覆盖 | 3.6、3.10 |
 | 图 5：存储与生命周期 | view、clone、loader 引用与设备读取完成的区别 | 3.3、5.4 |
-| 图 6A / 6B：UML 静态结构与符号重绑定 | 模块操作、真实类、闭包、依赖关系与模块属性重绑定，区分类继承与函数委托 | 2.8、3.1～3.5、3.10 |
+| 图 6：UML 静态结构与复用边界 | 模块操作、真实类、回调闭包与依赖关系，区分类继承与函数委托 | 2.8、3.1～3.5、3.10 |
 | 附图 A：异常清理 | drain、失败 storage 保留与异常优先级 | 附录 A |
 
 所有图描述第 1.1 节的固定源码，**不是拟议跨 chunk 修复方案**。图中 `[V]` 表示 vLLM 原实现，`[A]` 表示本 PR 的 Ascend packed 适配，`[E]` 表示既有引擎、worker 或模型代码，不在本 PR 修改。
@@ -111,7 +111,7 @@ flowchart LR
         E1 --> I1["[A] NPU IPC 保留本地循环<br/>容量 / metadata / NPU rebuild / 同步"]
         H1 --> C1["[A] 共用 callback 结果校验"]
         I1 --> C1
-        V1 --> U1["[A] 共用 owning-unpack<br/>字节 clone 后调用 vLLM 原 unpack"]
+        V1 --> U1["[A] owning 回调包装 / 本地 clone<br/>views 先经 vLLM 原 unpack"]
         I1 --> U1
         U1 --> V2["[V] dtype / shape 恢复"]
     end
@@ -132,8 +132,8 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    ENGINE["[E] hccl_engine.py"] --> ENTRY["[A] packed_broadcast_producer / consumer<br/>入口校验；安装 owning hook，见图 2B"]
-    ENTRY --> CTX["[A] _hccl_group<br/>登记 streams；退出时 finally drain"]
+    ENGINE["[E] hccl_engine.py"] --> ENTRY["[A] packed_broadcast_producer / consumer<br/>入口校验；consumer 侧包 owning 回调，见图 2B"]
+    ENTRY --> CTX["[A] _hccl_group<br/>用 accelerator 设备索引预热上游 stream 缓存；<br/>仅失败路径 finally drain"]
     CTX --> WRAP["[E] torch_cuda_wrapper<br/>已有 CUDA API 到 NPU 的转发"]
     CTX --> STREAMS["[V] _get_streams<br/>同一设备和 slot 数复用缓存"]
     ENTRY -->|直接调用，不复制函数体| LOOP["[V] packed_nccl_broadcast_producer / consumer<br/>分包与接收 / slot 轮转 / 自带依赖 / 正常 drain"]
@@ -142,10 +142,10 @@ flowchart TD
     PACK -->|通过传入的 callback| CHECK["[A] _checked_callback<br/>调用原 callback 后校验结果"]
     LOOP -->|调用传入的 group.broadcast| GROUP["[A] _HCCLPackedGroup.broadcast<br/>登记 buffer；native 前后同步"]
     GROUP --> NATIVE["[E] PyHcclCommunicator.broadcast<br/>显式传当前 NPU stream"]
-    LOOP -->|consumer 解包| UNPACK["模块 unpack_tensor 符号<br/>转入图 2B 的 owning-unpack"]
+    LOOP -->|consumer 解包| UNPACK["[V] unpack_tensor<br/>返回 raw buffer 的 views"]
 ```
 
-**图 2B：公共 owning-unpack 与保留的本地 IPC。** 这里只展开共享路径，不重复 HCCL 通信边界；节点与图 2A 对应（`HCCL packed 入口` 即图 2A 的 ENTRY，`原 broadcast consumer 循环` 即图 2A 的 LOOP），①② 标注"先幂等安装、后调用"的顺序。
+**图 2B：owning 回调包装与保留的本地 IPC。** 这里只展开共享路径，不重复 HCCL 通信边界；节点与图 2A 对应（`HCCL packed 入口` 即图 2A 的 ENTRY，`原 broadcast consumer 循环` 即图 2A 的 LOOP）。整个流程不重绑定任何 vLLM 模块属性。
 
 ```mermaid
 flowchart TD
@@ -153,23 +153,20 @@ flowchart TD
         IE["[E] npu_ipc_engine.py"] --> IP["[A] packed_npu_ipc_producer<br/>本地分包 / copy / yield"]
         IP --> CHECK["[A] _checked_callback<br/>与 HCCL 共用"]
         IE --> IC["[A] packed_npu_ipc_consumer<br/>校验 / NPU rebuild / 截取有效长度"]
+        IC -->|直接调用| ORIG["[V] unpack_tensor<br/>views；每项本地 clone"]
     end
-    HE["[A] HCCL packed 入口<br/>= 图 2A 的 ENTRY"] -->|"① 幂等安装"| HOOK["[A] _install_owning_unpack<br/>保存原函数并重绑定模块属性"]
-    IC -->|"① 幂等安装"| HOOK
-    HOOK -.->|"重绑定模块属性，持续生效"| SYMBOL["vLLM 模块 unpack_tensor 符号"]
-    LOOP["[V] 原 broadcast consumer 循环<br/>= 图 2A 的 LOOP"] -->|"运行时查找"| SYMBOL
-    IC -->|"② 安装后显式调用"| SYMBOL
-    SYMBOL --> OWN["[A] owning_unpack<br/>split；每段 raw.clone"]
-    OWN -->|单 tensor metadata| ORIG["[V] 保存的原 unpack 函数<br/>contiguous / view dtype / view shape"]
+    HE["[A] HCCL packed 入口<br/>= 图 2A 的 ENTRY"] --> WRAP2["[A] _owning_post_unpack<br/>包装 engine 的 post_unpack_func"]
+    LOOP["[V] 原 broadcast consumer 循环<br/>= 图 2A 的 LOOP"] -->|"解包 views"| ORIG
+    LOOP -->|调用传入的回调| WRAP2
+    WRAP2 -->|逐项 clone 后| ENGINECB["[E] engine post_unpack_func<br/>拿到独立 storage 的 tensors"]
 ```
 
+图 2A / 2B 的两侧影响范围：
 
-图 2A / 2B 有两个不同的影响范围，不能画成“退出即恢复的局部 patch”：
+- `torch_cuda_wrapper` 修改进程级 `torch.cuda` 的 stream/event/graph 等 API，退出后不恢复；当前按 NPU-only 约束复用该已有行为。它不把 HCCL 改成 NCCL，也不覆盖 `torch.accelerator`。
+- `_owning_post_unpack` 只是我们传给原循环的回调包装，随调用结束即弃，不修改任何模块属性；views→clone 的顺序意味着解包结果先经 vLLM 原函数、再在包装内取得独立 storage。
 
-- `torch_cuda_wrapper` 修改进程级 `torch.cuda` 的 stream/event/graph 等 API，退出后不恢复；当前按 NPU-only 约束复用该已有行为。它不把 HCCL 改成 NCCL。
-- owning hook 修改 vLLM packed 模块的 `unpack_tensor` 属性，安装后持续有效，其他通过该模块符号调用的路径也能看到它。保存的原函数单独持有，避免递归调用 hook 自身。
-
-IPC 仅复用 callback 验证和 owning-unpack 中的原 dtype/shape 恢复；**未委托 vLLM IPC producer、consumer 或 importer**。`_get_streams`、`pack_tensors` 等不新增本地同名副本。
+IPC 复用 callback 验证和 `unpack_tensor` 的 dtype/shape 恢复，clone 由 consumer 本地完成；**未委托 vLLM IPC producer、consumer 或 importer**。`_get_streams`、`pack_tensors` 等不新增本地同名副本。
 
 ### 2.5 图 3：HCCL packed 收发时序
 
@@ -204,12 +201,12 @@ sequenceDiagram
         AG-->>VP: 返回
         Note over VP: 保存 chunk 到 in_flight；切换下一发送 slot
     end
-    VP->>TS: EOF：上游逐一 synchronize 所有发送 streams（正常 drain）
+    VP->>TS: EOF：上游逐一 synchronize 所有发送 streams（正常 drain，唯一的正常路径同步）
     VP-->>TC: 原 producer 正常返回
-    FIN->>TS: finally 再 drain 所有已登记 streams（与上游 EOF drain 重复同步，见 5.5）
+    FIN->>TS: 仅异常路径：finally drain 所有已登记 streams（见附录 A）
 ```
 
-`buffer_size_bytes` 在这里是 flush 阈值：先加入 tensor，再判断累计大小是否超过阈值。空 iterator 不产生 chunk；阈值不是固定容量上限。包装器在 native HCCL 前后执行保守同步，因此多 slot 不等于已经形成有效通信/计算重叠。图末两条 drain 来源不同：EOF 的正常 drain 来自 vLLM 原 producer，finally drain 来自 `_hccl_group` 的异常清理边界（附录 A），正常路径下两者重复同步，是 5.5 节列出的候选调整。
+`buffer_size_bytes` 在这里是 flush 阈值：先加入 tensor，再判断累计大小是否超过阈值。空 iterator 不产生 chunk；阈值不是固定容量上限。包装器在 native HCCL 前后执行保守同步，因此多 slot 不等于已经形成有效通信/计算重叠。图末的 EOF drain 来自 vLLM 原 producer；v1.0.7 起 finally 仅在异常路径执行本地 drain（保留失败 storage 与优先级语义，附录 A），正常路径不再重复同步。
 
 **图 3B：接收 worker。** 本图以 main 配套为准。为避免把“排队”和“完成”混淆，event 依赖的建立与 host 等待分开标注。
 
@@ -219,7 +216,7 @@ sequenceDiagram
     participant VC as [V] consumer
     participant RS as 接收 NPU stream R_i
     participant AG as [A] group 包装 / 原 HCCL
-    participant OU as [A] owning-unpack
+    participant OU as [A] owning 回调包装
     participant ML as [E] worker 模型 loader
     WC->>VC: 委托 metadata iterator；显式 device=npu
     Note over WC,VC: 记录 caller stream；初始化 prev_received 和每 slot 的 slot_done
@@ -236,23 +233,23 @@ sequenceDiagram
         VC->>RS: enqueue wait_event(prev_received)，若存在
         VC->>RS: enqueue record 新 receive-ready event
         VC->>VC: raw buffer.record_stream 所有接收 streams 和 caller
-        VC->>OU: unpack_tensor 模块符号
-        OU->>RS: enqueue 每段 raw.clone
-        OU->>OU: 调保存的原 unpack 恢复 dtype / shape
-        OU-->>VC: 独立 storage 的 tensor 列表；clone 未必执行完
-        VC->>ML: post_unpack_func(tensors)，仍在 R_i 上下文
+        VC->>VC: unpack_tensor：返回 raw buffer 的 views
+        VC->>OU: post_unpack_func(views)
+        OU->>RS: enqueue 逐项 clone（仍在 R_i 上下文）
+        OU->>ML: clone 后的独立 tensors 交给 engine 回调
         Note over ML,RS: loader 可保留早先 chunk；后续回调可能在 R_j 读取它
-        ML-->>VC: Python callback 返回，不代表所有设备读取结束
+        ML-->>OU: Python callback 返回，不代表所有设备读取结束
+        OU-->>VC: 返回
         VC->>RS: enqueue record slot_done[i]
         Note over VC: 切换下一个接收 slot
     end
-    VC->>RS: EOF：逐一 synchronize 所有接收 streams
-    VC-->>WC: 返回；本地 finally 再 drain 已登记 streams
+    VC->>RS: EOF：逐一 synchronize 所有接收 streams（正常 drain）
+    VC-->>WC: 返回；仅异常路径由本地 finally 兜底 drain
 ```
 
-main 的 `slot_done` 用于**同一个接收 slot 的复用**，不是让下一个不同 slot 等待前一 callback。v0.33.0 没有这组 slot_done event，复用 slot 前直接 synchronize；其余本图的 receive-ready 链、raw buffer record_stream 和 owning 解包关系相同。
+main 的 `slot_done` 用于**同一个接收 slot 的复用**，不是让下一个不同 slot 等待前一 callback。v0.33.0 没有这组 slot_done event，复用 slot 前直接 synchronize；其余本图的 receive-ready 链、raw buffer record_stream 和回调包装的 clone 关系相同。
 
-receive-ready event 在 owning clone **之前**记录；raw buffer 的 record_stream 也没有转移给新 clone。因此不能从本图推导“R_j 已等到 R_i clone 完成”或“clone 在所有 reader streams 上都安全”。这正是第 5.4 节仍保留的验证边界，本 PR 不额外补 event 链。
+receive-ready event 在 clone **之前**记录；raw buffer 的 record_stream 涵盖 caller stream，因此 raw storage 不会被 allocator 提前复用。但仍不能从本图推导“R_j 已等到 R_i clone 完成”：clone 的设备读没有等待事件，loader 若在 caller 或其他 stream 上读取，读序没有保证。这正是第 5.4 节仍保留的验证边界，本 PR 不额外补 event 链。
 
 ### 2.6 图 4：NPU IPC packed 收发时序
 
@@ -281,8 +278,7 @@ sequenceDiagram
         WE->>IC: packed_npu_ipc_consumer
         IC->>IC: 校验 UUID / metadata / device；替换句柄内 device index
         IC->>IC: rebuild_npu_tensor；截取有效字节
-        IC->>WS: owning-unpack enqueue 每段 clone
-        IC->>IC: 保存的 vLLM 原 unpack 恢复 dtype / shape
+        IC->>WS: unpack_tensor 返回 views；enqueue 每项 clone
         IC-->>WE: 返回独立 storage 的 tensors
         WE->>ML: model.load_weights(tensors)
         ML->>WS: 提交模型加载所需操作
@@ -301,7 +297,7 @@ sequenceDiagram
 
 ### 2.7 图 5：buffer、view 与 owning tensor 的存储生命周期
 
-下面是存储关系图，箭头文字区分复制和别名，不表示类继承。每个 clone 是字节存储的 owner；返回的 typed tensor 通常是**该 clone 的 view**，它不再是原 packed buffer 的 view。HCCL 与 IPC 每次调用分别创建自己的 clone，图中两条链各画一个 clone 节点，仅在共用解包逻辑处汇合，不表示共享同一 clone 实例。
+下面是存储关系图，箭头文字区分复制和别名，不表示类继承。每个 clone 是字节存储的 owner；返回的 typed tensor 直接持有该 clone storage，不再是原 packed buffer 的 view。HCCL 与 IPC 每次调用分别创建自己的 clone，图中 clone 节点表示共用同一创建语义，不表示共享同一 clone 实例。
 
 ```mermaid
 flowchart TB
@@ -314,15 +310,14 @@ flowchart TB
         EXPORT[trainer 单个导出 buffer] -->|句柄重建：共享存储| IMPORT[worker 导入映射]
         IMPORT -->|split：别名| IRAW[各 tensor 的 uint8 slice]
     end
-    RAW -->|"enqueue clone：复制（每次调用各自创建）"| CLONEH[HCCL clone storage]
-    IRAW -->|"enqueue clone：复制（每次调用各自创建）"| CLONEI[IPC clone storage]
-    CLONEH --> UNPACK[vLLM 原 unpack：dtype / shape view]
-    CLONEI --> UNPACK
-    UNPACK --> TENSOR[返回的 named tensors<br/>view 持有各自的 clone storage]
+    RAW --> UNPACK[vLLM 原 unpack：dtype / shape views]
+    IRAW --> UNPACK
+    UNPACK -->|"clone：复制（HCCL 回调包装 / IPC consumer 各自创建）"| CLONE[clone storage<br/>HCCL 与 IPC 每次调用各自创建]
+    CLONE --> TENSOR[返回的 named tensors<br/>独立持有各自的 clone storage]
     TENSOR -->|Python 引用可被保留| LOADER[worker 模型 loader / layerwise 暂存]
     LOADER -->|可能在后续 R_j / caller stream 提交读取| READ[设备异步读取<br/>可能晚于引用释放]
     LOADER -->|重放后 reset 可释放引用| FREE[allocator 回收 clone storage<br/>可能立即复用同一地址]
-    READ -.-> RISK["⚡ 冲突：缺少 reader 生命周期保护时<br/>回收复用与仍在进行的读重叠<br/>（本 PR 未修复，见 5.4）"]
+    READ -.-> RISK["⚡ 冲突：clone 的读序无事件保证时<br/>延迟读与后续覆盖 / 回收重叠<br/>（本 PR 未修复，见 5.4）"]
     FREE -.-> RISK
 ```
 
@@ -333,15 +328,13 @@ flowchart TB
 | HCCL 发送 packed buffer | producer 的 in_flight；本地包装器另登记每 slot 最后通信 buffer | native 读取完成；旧 slot 工作完成 | native 前后同步，slot 轮转等待，退出 drain |
 | HCCL 接收 raw buffer | consumer 局部引用；本地包装器登记 | 原 buffer 的异步访问结束 | vLLM 原循环对 raw buffer 记录接收 streams 和 caller |
 | IPC 导出 buffer / worker 映射 | 暂停中的 generator / worker 本次 rebuild 结果 | 所有 worker 不再读取该 chunk 的共享字节，才可覆盖 | generator 不自行调度消费确认；依赖调用方编排 |
-| owning clone storage | 返回 tensor 的 view、loader 暂存引用 | clone 完成后才能读取；所有异步读结束后才能回收复用 | 独立存储与对齐已保留；未增加 clone 的跨 stream event / record_stream |
+| owning clone storage | 返回 tensor 本体、loader 暂存引用 | clone 完成后才能读取；所有异步读结束后才能回收复用 | 独立存储已保留；raw buffer 的 record_stream 不覆盖 clone 本身的读序（见 5.4） |
 
 **独立存储、数据就绪和生命周期是三个条件。** clone 保证不再别名原 buffer，但 clone 的提交不是完成证明；loader 持有 Python 引用可延长 storage 存活，却不能代替跨 stream 依赖；引用释放后仍可能有设备读在运行。图 5 的冲突节点（⚡）只标记未解决风险，不能作为本 PR 已修复该问题的证据。
 
-### 2.8 图 6A / 6B：UML 静态结构、符号重绑定与复用边界
+### 2.8 图 6：UML 静态结构与复用边界
 
-图 6A 采用 UML 类图记法展示模块、实际类和闭包；图 6B 用状态图单独表达模块属性的重绑定——依赖箭头无法表达"属性指向被替换"这一动态事实，单靠一张类图容易把 `VLLM ⇄ owning` 的两条边误读成递归或循环导入。`«module»` 方框中的操作是 Python **模块函数**，不是某个虚构父类的方法；这里只列出本次实际使用的 vLLM 成员。模块函数省略参数，签名和行为见第 3 章。`«closure»` 是安装 hook 时生成的局部函数，也不是新增类。
-
-**图 6A：静态结构。** 模块属性 `unpack_tensor` 显式标注为可被重绑定的 `Callable`。
+图 6 采用 UML 类图记法展示模块、实际类和回调闭包。`«module»` 方框中的操作是 Python **模块函数**，不是某个虚构父类的方法；这里只列出本次实际使用的 vLLM 成员。模块函数省略参数，签名和行为见第 3 章。`«closure»` 是入口包装 `post_unpack_func` 时生成的局部函数，也不是新增类。v1.0.7 起 owning 语义由回调包装提供，**不再存在模块属性重绑定**，v1.0.6 的 6B 状态图随之删除。
 
 ```mermaid
 classDiagram
@@ -354,7 +347,7 @@ classDiagram
         +packed_npu_ipc_consumer()
         -_hccl_group()
         -_checked_callback()
-        -_install_owning_unpack()
+        -_owning_post_unpack()
         -_drain_packed_streams()
         -_UNSYNCHRONIZED_BUFFERS : list
     }
@@ -363,7 +356,7 @@ classDiagram
         +packed_nccl_broadcast_producer()
         +packed_nccl_broadcast_consumer()
         +pack_tensors()
-        +unpack_tensor : Callable 可被重绑定
+        +unpack_tensor()
         -_get_streams()
     }
     class HCCLGroup["_HCCLPackedGroup"] {
@@ -381,45 +374,30 @@ classDiagram
         +dtypes
         +tensor_sizes
     }
-    class Owning["owning_unpack"] {
+    class Owning["owning（回调包装闭包）"] {
         <<closure>>
-        -captured : 安装前的原 unpack 引用
-        +__call__(packed, names, shapes, dtypes, sizes)
+        -wrapped : engine 的 post_unpack_func
+        +__call__(views : list)
     }
-    AscendPacked ..> VllmPacked : 委托广播入口并调用原实现
+    AscendPacked ..> VllmPacked : 委托广播入口并直接调用原实现
     AscendPacked ..> HCCLGroup : 创建并传给原广播循环
     VllmPacked ..> HCCLGroup : 运行时调用传入对象的 broadcast
     VllmPacked ..> Chunk : pack_tensors 创建 / producer 持有
-    AscendPacked ..> Owning : 幂等创建并安装到模块符号
-    VllmPacked ..> Owning : 安装后经重绑定的模块属性调用（见 6B）
-    Owning ..> VllmPacked : 调用捕获的安装前函数引用，不查模块符号
+    VllmPacked ..> Owning : 循环把 views 作为参数传入回调
+    Owning ..> VllmPacked : views 来自调用 unpack_tensor 的返回值
 ```
 
-**图 6B：模块属性重绑定状态图。** 安装前/安装后两个状态分离，闭包与原函数的直连关系单独标注。
-
-```mermaid
-flowchart LR
-    subgraph BEFORE["安装前（import 后初始状态）"]
-        SYM0["模块属性 upstream.unpack_tensor"] --> ORIG["[V] 原 unpack 函数<br/>contiguous / view dtype / view shape"]
-    end
-    subgraph AFTER["安装后（_install_owning_unpack 幂等生效）"]
-        SYM1["模块属性 upstream.unpack_tensor<br/>被重绑定，持续生效"] --> OWN["[A] owning_unpack 闭包<br/>split；每段 raw.clone；再恢复 dtype/shape"]
-        OWN -.->|"捕获的函数引用<br/>（安装前保存，不查模块符号 → 无递归）"| ORIG
-    end
-    BEFORE ==>|"调用一次 _install_owning_unpack"| AFTER
-```
-
-图 6A 的虚线箭头是 UML **依赖/使用**关系，不是时序图的“返回”。图中没有空心三角继承箭头，因为当前 packed 层没有新增父子类关系；也没有将 `_HCCLPackedGroup` 画成 NCCL communicator 的子类，它只通过 `broadcast` 方法满足循环的调用接口。`VLLM ⇄ owning` 两条边的语义不同：安装后 vLLM 循环经重绑定的模块属性调用 owning-unpack；owning-unpack 调用的则是闭包捕获的安装前函数引用，不查模块符号，因此不会递归（见图 6B）。
+图 6 的虚线箭头是 UML **依赖/使用**关系，不是时序图的“返回”。图中没有空心三角继承箭头，因为当前 packed 层没有新增父子类关系；也没有将 `_HCCLPackedGroup` 画成 NCCL communicator 的子类，它只通过 `broadcast` 方法满足循环的调用接口。`VllmPacked → Owning` 是普通的函数参数传递：上游循环以 `post_unpack_func(unpack_tensor(...))` 的形式调用，包装闭包在自己的函数体内逐项 clone，全程不读写任何模块属性。
 
 | 图中关系 | 实际代码及复用方式 | 不应误读为 |
 | --- | --- | --- |
-| Ascend 模块 → vLLM 模块 | 两个广播入口直接调用 `upstream.packed_nccl_broadcast_*`；IPC consumer 调安装后的 `upstream.unpack_tensor` | Ascend 模块继承了一个 PackedTensor 基类 |
+| Ascend 模块 → vLLM 模块 | 两个广播入口直接调用 `upstream.packed_nccl_broadcast_*`；IPC consumer 直接调用 `upstream.unpack_tensor` 后本地 clone | Ascend 模块继承了一个 PackedTensor 基类 |
 | vLLM 模块 → `_HCCLPackedGroup` | 函数参数 `group` 接收到包装对象，循环运行时调用其 broadcast | vLLM 源码导入了 Ascend 类，或实际使用 NCCL 通信 |
 | vLLM 模块 → `PackedChunk` | 原 `pack_tensors` 创建数据对象，原 producer 用 in_flight 持有 | Ascend 另写了 PackedChunk 子类或转换副本 |
-| Ascend 模块 → owning 闭包 | `_install_owning_unpack` 捕获原函数，替换 vLLM 模块的 unpack_tensor 属性 | 改写安装目录下的 vLLM 源文件 |
-| owning 闭包 → vLLM 原 unpack | 每段 clone 后用单 tensor metadata 调用捕获的原函数 | 再调用已替换的同名模块符号，导致递归 |
+| vLLM 模块 → owning 闭包 | consumer 把 `_owning_post_unpack(post_unpack_func)` 作为 `post_unpack_func` 参数传入 | vLLM 被打补丁，或全局替换了 unpack 符号 |
+| owning 闭包 → engine 回调 | 每项 views clone 后调用原 `post_unpack_func`，返回值被丢弃 | 回调结果回写上游循环 |
 
-模块操作前的 `+ / -` 仅区分公开入口与下划线内部 helper；Python 不因此增加访问控制。图里的 `unpack : captured original function` 是闭包捕获引用，不是源码新增的类属性。
+模块操作前的 `+ / -` 仅区分公开入口与下划线内部 helper；Python 不因此增加访问控制。
 
 **没有复用的部分：** vLLM 的 `packed_ipc_producer`、`packed_ipc_consumer`、`PackedBufferImporter` 和 `PackedIpcChunk` 没有进入当前 NPU IPC 路径，不画成 Ascend 的父类或已复用组件。NPU IPC 的本地分包、句柄重建和 metadata 校验仍在 Ascend 模块内。已有 engine 类继承关系不属于本 PR 的 packed 重构，图 6 不展开。
 
@@ -483,23 +461,23 @@ HCCL 复用迭代、线性化、metadata、cat 和阈值规则；本地保留预
 
 **当前 Ascend 流程**
 
-main 原 HCCL consumer 和 NPU IPC consumer 都先 clone 字节切片，再恢复 dtype/shape，保证独立 storage，也能处理混合 dtype 的未对齐 offset。
+main 原 HCCL consumer 和 NPU IPC consumer 都保证返回独立 storage，也能处理混合 dtype 的未对齐 offset。
 
-当前 `_install_owning_unpack` 保存 vLLM 原 unpack，并幂等安装 owning-unpack 分派：先 split，每段 clone，再将单 tensor metadata 交给保存的原函数恢复 dtype/shape。HCCL 原循环调用这个分派；IPC consumer 在完成原有校验和 NPU rebuild 后也调用 `_install_owning_unpack()`，再调用 `upstream.unpack_tensor(...)`，不再维护另一套 offset 解包循环。IPC 单独调用无需等待 HCCL 先执行。
+当前 HCCL 侧把 engine 的 `post_unpack_func` 交给 `_owning_post_unpack` 包装：原循环调用 `unpack_tensor` 得到 views，包装闭包逐项 `clone()` 后再调用 engine 回调。IPC consumer 在完成原有校验和 NPU rebuild 后直接调用 `upstream.unpack_tensor(...)`，对返回的 views 逐项 clone 后返回，不再维护另一套 offset 解包循环。两条路径都不修改任何 vLLM 模块属性。
 
 **差异**
 
-原 vLLM 返回 views；Ascend 原契约允许 callback 保留或修改输入，不得别名 packed buffer。另外，uint8 offset=6 的切片不能直接 view(int64)，但 clone 后 offset=0 可以。
+原 vLLM 返回 views；Ascend 原契约允许 callback 保留或修改输入，不得别名 packed buffer。另外，uint8 offset=6 的切片不能直接 view(int64)，但 unpack 内部恢复 dtype 顺序与 clone 时机配合后不受影响。
 
 **继承/复用方案**
 
-为保持 main 既有独立存储契约，当前保留字节 clone，再调用原 unpack。HCCL 与 IPC 共用同一个安装后的 unpack 已在 e5b128e35 落地，没有新增独立 helper 文件。HCCL 原生 views 路线是后续候选，会改变该契约，尚未采用。
+为保持 main 既有独立存储契约，当前保留 clone，只是把 clone 从“替换模块符号”移进我们自己的回调包装。HCCL 与 IPC 都直接调用原 `unpack_tensor`，没有新增独立 helper 文件。HCCL 原生 views 路线是后续候选，会改变该契约，尚未采用。
 
 **复用内容与保留边界**
 
-复用 dtype/shape 恢复实现；保留独立存储和字节对齐。每 tensor 多一次原函数调用的成本尚未做硬件评估。这个兼容层不引入 callback 完成 event 或额外 record_stream，也不代表跨 chunk 时序问题已解决。
+复用 dtype/shape 恢复实现；保留独立存储。每 tensor 多一次 clone 的成本尚未做硬件评估。这个包装不引入 callback 完成 event 或额外 record_stream，也不代表跨 chunk 时序问题已解决。
 
-注意：hook 替换的是 vLLM packed 模块的 unpack 符号，安装后持续生效；该模块其他函数随后查找该符号也会看到 owning 行为。当前 NPU IPC consumer 也显式调用该符号。hook 不安装 stream/event 依赖，只负责返回独立存储。
+注意：包装只是普通函数参数，随本次调用结束即弃；进程内其他任何 `unpack_tensor` 调用者看到的仍是 vLLM 原函数。包装不安装 stream/event 依赖，只负责返回独立存储。
 
 ### 3.4 `packed_nccl_broadcast_producer` → `packed_broadcast_producer`
 
@@ -514,9 +492,9 @@ main 原 HCCL consumer 和 NPU IPC consumer 都先 clone 字节切片，再恢�
 
 **当前 Ascend 流程**
 
-main 原实现本地维护取参数、打包、cat、slot 轮转和 finally。当前入口先校验配置、安装 owning-unpack 适配，进入使用既有 V2 wrapper 的 `_hccl_group`，再直接调用原 vLLM producer。传入的 group 是 `_HCCLPackedGroup`，其 broadcast 调用真实 PyHcclCommunicator，并显式传入当前 NPU stream。
+main 原实现本地维护取参数、打包、cat、slot 轮转和 finally。当前入口先校验配置，进入使用既有 V2 wrapper 的 `_hccl_group`（用 `torch.accelerator` 的设备索引预热上游 stream 缓存，保证与原循环命中同一组 streams），再直接调用原 vLLM producer。传入的 group 是 `_HCCLPackedGroup`，其 broadcast 调用真实 PyHcclCommunicator，并显式传入当前 NPU stream。
 
-本地包装器登记每 slot 最后一个通信 buffer，在 native HCCL 前后同步；contextmanager 在退出时执行 main 已有的 `_drain_packed_streams`。
+本地包装器登记每 slot 最后一个通信 buffer，在 native HCCL 前后同步；contextmanager 仅在本次调用出现异常时执行 `_drain_packed_streams`——正常路径的 drain 交给上游原 producer，避免重复同步。
 
 **差异**
 
@@ -548,7 +526,7 @@ v0.33.0 已有 receive-ready event 链和 raw buffer 的 record_stream，但没�
 
 **当前 Ascend 流程**
 
-main 原实现本地累加 metadata、分配、广播、clone 解包、调用 loader 和 finally。当前入口保留配置及 negative-shape 检查，通过 `_hccl_group` 调原 vLLM consumer，明确传 `device="npu:N"`；通信和 owning-unpack 由本地边界适配，其余随安装的 vLLM 版本执行。
+main 原实现本地累加 metadata、分配、广播、clone 解包、调用 loader 和 finally。当前入口保留配置及 negative-shape 检查，把 engine 的 `post_unpack_func` 包上 `_owning_post_unpack` 后，通过 `_hccl_group` 调原 vLLM consumer，明确传 `device="npu:N"`；通信和 owning clone 由本地边界适配，其余随安装的 vLLM 版本执行。
 
 **差异**
 
@@ -560,7 +538,7 @@ main 原实现本地累加 metadata、分配、广播、clone 解包、调用 lo
 
 **复用内容与保留边界**
 
-复用 metadata 分包、buffer 分配、slot 轮转、vLLM 自带 event/record_stream 和正常 drain；保留 NPU device、HCCL 完成边界、owning 解包和异常清理。vLLM 自带依赖仍会执行，但不能据此沿用此前 Ascend 专门修复分支的硬件结论。
+复用 metadata 分包、buffer 分配、slot 轮转、vLLM 自带 event/record_stream、正常 drain 和 negative-shape 校验 helper；保留 NPU device、HCCL 完成边界、回调包装的 owning clone 和异常清理。vLLM 自带依赖仍会执行，但不能据此沿用此前 Ascend 专门修复分支的硬件结论。
 
 ### 3.6 `packed_ipc_producer` → `packed_npu_ipc_producer`
 
@@ -676,11 +654,11 @@ rebuild API 写死 CUDA；NPU 的 export/release 语义不能仅凭 CUDA 的泄�
 2. 校验 device_index、UUID、dtype、metadata 长度、shape、byte size 和句柄长度。
 3. 选择 NPU 句柄，修正接收 device index，调用 rebuild_npu_tensor。
 4. 检查声明的有效字节数不超过实际 buffer，再截取有效区域。
-5. 调用 `_install_owning_unpack()`，再由 `upstream.unpack_tensor(...)` 执行共享的字节 clone → 原 vLLM dtype/shape 恢复，返回结果。
+5. 直接调用 `upstream.unpack_tensor(...)`，对返回的 views 逐项本地 clone（与上游 IPC consumer 自身的 clone 写法一致），返回独立 storage 的结果。
 
 **差异**
 
-设备身份来源、重建 API、额外校验、importer 缓存策略不同。解包顺序也不同：vLLM 先 view 再 clone，Ascend 先 clone 字节再 view，因此能处理未对齐 offset。
+设备身份来源、重建 API、额外校验、importer 缓存策略不同。解包顺序也不同：vLLM 先 view 再 clone（结果为独立 tensor），Ascend 同为 view 再 clone，因此混合 dtype 的未对齐 offset 由原 unpack 的 split/恢复顺序处理。
 
 **继承/复用方案**
 
@@ -718,7 +696,7 @@ HCCL 数据结构和常量直接用；IPC 暂不为了结构统一额外做 data
 
 | 文件 | 当前职责 | 本轮是否修改 |
 | --- | --- | --- |
-| vLLM `distributed/weight_transfer/packed_tensor.py` | 原打包、广播循环、stream 缓存、解包、CUDA IPC 工具 | 不改安装源码；本模块安装 owning-unpack，设备 API 使用既有 V2 wrapper |
+| vLLM `distributed/weight_transfer/packed_tensor.py` | 原打包、广播循环、stream 缓存、解包、CUDA IPC 工具 | 不改源码；HCCL 经回调包装、IPC 直接调用后本地 clone，设备 API 使用既有 V2 wrapper |
 | Ascend `distributed/weight_transfer/packed_tensor.py` | HCCL 薄入口和设备边界、原清理保障、本地 NPU IPC | 修改 |
 | Ascend `distributed/weight_transfer/hccl_engine.py` | 建组、更新编排、调用本地广播入口 | 保持 main 原样，包括注释 |
 | Ascend `distributed/weight_transfer/npu_ipc_engine.py` | 生成 NPU 身份、IPC engine 编排、调用本地 IPC 入口 | 保持 main 原样 |
@@ -729,11 +707,11 @@ HCCL 数据结构和常量直接用；IPC 暂不为了结构统一额外做 data
 
 ### 4.2 已落地的公共工具关系
 
-公共函数的实际委托与 hook 关系见第 2.4 节图 2；HCCL 和 IPC 的执行顺序分别见图 3、图 4。
+公共函数的实际委托与包装关系见第 2.4 节图 2；HCCL 和 IPC 的执行顺序分别见图 3、图 4。
 
-公共解包位于现有 Ascend packed_tensor.py：`_install_owning_unpack` 保存原函数并安装分派，HCCL 原 consumer 和 NPU IPC consumer 都通过模块符号调用它。分派内部调用保存的原 unpack，不递归调用已经替换的同名符号。没有新增 adapter/utils 文件。
+公共解包位于现有 Ascend packed_tensor.py：HCCL 的 `post_unpack_func` 经 `_owning_post_unpack` 包装（views 逐项 clone 后转交 engine 回调），IPC consumer 直接调用原 `unpack_tensor` 后逐项 clone。两条路径都是普通函数调用，不修改任何模块符号。没有新增 adapter/utils 文件。
 
-callback 结果验证也已共用 `_checked_callback`，IPC 仅在循环外创建一次 wrapper，各参数仍调用一次用户 callback。本次共享净减少 15 行（+4/-19），没有改动分包、句柄重建、同步及异常清理。
+callback 结果验证也已共用 `_checked_callback`，IPC 仅在循环外创建一次 wrapper，各参数仍调用一次用户 callback。negative-shape 检查同样抽成 `_reject_negative_shape`，HCCL metadata 与 IPC 校验循环共用。
 
 不要从 packed_tensor.py 反向导入 npu_ipc_engine.py 的 npu_generate_uuid：engine 已导入 packed，容易形成循环依赖；physical_npu_id 当前由调用方传入即可。
 
@@ -751,9 +729,9 @@ callback 结果验证也已共用 `_checked_callback`，IPC 仅在循环外创�
 
 ### 5.1 代码与维护成本
 
-main 原 packed 文件为 449 行；引入既有 V2 wrapper 后为 339 行；当前 e5b128e35 共享 IPC 解包与校验后为 324 行。此前将 IPC 整个发送循环委托并补兼容的实验约 312 行，但需要分配重定向、reduce 转发、全空前缀特殊路径和协议转换，已撤回。当前只共享通用解包和校验，不强行套用整条 CUDA IPC 路径。
+main 原 packed 文件为 449 行；引入既有 V2 wrapper 后为 339 行；v1.0.6 的 e5b128e35 为 324 行。v1.0.7 的 773c8947e 删除了 owning-unpack hook，但新增回调包装、缓存键对齐、drain 门控与共享 shape 校验，为 344 行；另在 UT 中新增上游符号护栏、缓存键与 `_HCCLPackedGroup` 直接用例。此前将 IPC 整个发送循环委托并补兼容的实验约 312 行，但需要分配重定向、reduce 转发、全空前缀特殊路径和协议转换，已撤回。当前只共享通用解包和校验，不强行套用整条 CUDA IPC 路径。
 
-行数不是唯一指标：原循环和分包 bugfix 能随配套更新进入执行路径，是 HCCL 复用的主要收益；私有函数、module hook 和每 tensor 原函数调用则是本地仍需检视的成本。不能声称所有未来修改都零适配。
+行数不是唯一指标：原循环和分包 bugfix 能随配套更新进入执行路径，是 HCCL 复用的主要收益；回调包装与每 tensor clone 则是本地仍需检视的成本。不能声称所有未来修改都零适配。
 
 ### 5.2 必须保留的功能
 
@@ -777,7 +755,7 @@ main 已将 E2E 公共逻辑迁移到 `tests/e2e/common/rlhf/weight_transfer/`�
 
 ### 5.4 NPU 解包完整性与跨 chunk 边界
 
-在测试 NPU 上，对与 e5b128e35 相同的代码做了小规模探针。这里使用真实 NPU tensor、算子、stream、event 和 allocator；HCCL 广播由同 stream 的 copy 模拟，未执行真实 HCCL collective、完整模型 E2E 或多进程 IPC。
+在测试 NPU 上，对 v1.0.6 的 e5b128e35（owning-unpack hook 版本）做了小规模探针。这里使用真实 NPU tensor、算子、stream、event 和 allocator；HCCL 广播由同 stream 的 copy 模拟，未执行真实 HCCL collective、完整模型 E2E 或多进程 IPC。v1.0.7 把 clone 时机从“unpack 前的字节 clone”改为“unpack 后的回调内 clone”，clone 的读序缺口机制相同，但探针数据未按新实现重跑，合并前需按 773c8947e 重做最小用例。
 
 | 验证场景 | 当前代码 | 仅测试进程增加 event + clone record_stream 的对照 |
 | --- | --- | --- |
@@ -790,7 +768,8 @@ main 已将 E2E 公共逻辑迁移到 `tests/e2e/common/rlhf/weight_transfer/`�
 因此必须区分：
 
 - 独立存储成立：原 packed buffer 被覆盖，不会改变已经完成的 clone。
-- 异步读取安全尚不成立：vLLM 的 receive-ready event 和 raw buffer record_stream 保护的是 raw storage，不自动覆盖随后创建的 clone。
+- raw storage 的复用保护成立：两套配套（main 与 v0.33.0）的 consumer 都有 receive-ready event 链，并对 raw buffer 记录全部接收 streams 和 caller stream 的 record_stream，allocator 不会提前复用 raw storage。
+- 异步读取的读序尚不成立：clone 产生的新 storage 不在上述 record_stream 名单内，clone 的设备读也没有等待事件；loader 若在 caller 或其他 stream 上读取 clone，读序无保证。
 - Python loader 保留引用也不等于设备已读完。当前 layerwise 会把参数 bound_args 存入 loaded_weights，重放提交设备操作后 reset 释放引用；跨 stream 就绪及释放后异步读取仍需正确依赖。
 
 这些机制探针错误与前述 CPU UT 的 179 passed 并不矛盾：CPU 假件不能验证实际设备时序。此结果不能外推为所有真实模型 E2E 一定失败，也不能证明真实多进程 IPC 已发生相同问题；它已经足以说明“继承 vLLM 循环”不能作为当前 Ascend 跨 chunk 问题已解决的依据。
@@ -800,23 +779,28 @@ main 已将 E2E 公共逻辑迁移到 `tests/e2e/common/rlhf/weight_transfer/`�
 
 | 内容 | 当前状态 | 后续讨论边界 |
 | --- | --- | --- |
-| HCCL/IPC 公共 owning-unpack | 已落地 | 保持 main 既有独立存储和对齐功能，不宣称时序修复完成 |
+| HCCL 回调包装 owning clone / IPC 本地 clone | 已落地（v1.0.7 重写，替代 owning-unpack hook） | 保持 main 既有独立存储，不宣称时序修复完成；包装随调用即弃，不修改模块属性 |
+| stream 缓存键与上游统一 | 已落地（`torch.accelerator.current_device_index`） | 前提是真机上 torch.accelerator 能解析 NPU，需真机最小用例验证 |
+| 正常路径 drain 委托 | 已落地（仅异常路径走本地 drain） | 依赖上游正常结尾 drain 的存在；配套签名护栏 UT 会在此前提被破坏时提前报错 |
+| 上游符号护栏 UT | 已落地 | 签名、consumer `device` 参数、正常 drain 注释，pin bump 即红 |
 | IPC producer 公共校验 | 已落地 | 不扩展到整个 IPC 发送循环 |
 | HCCL 原生 views | 未采用 | 有望直接使用 vLLM 对 raw buffer 的保护，但会改变独立存储契约；需处理对齐并验证实际 loader 及派生计算 |
-| HCCL 正常退出 drain 委托 | 未调整 | 可评估正常路径是否重复同步；异常存储保护继续保留，未获验证前不删 native 通信完成边界 |
+| clone 读序修复 | 未采用 | 若真机最小用例证实缺口，在 `_owning_post_unpack` 内补 caller stream 事件等待，纯本地几行 |
 | IPC metadata 数据结构 | 未调整 | 仅在确实减少维护成本时考虑 PackedIpcChunk，不改变现有字典协议 |
 | IPC importer 缓存 | 不在本次复用范围 | 保持独立问题和独立修复，不混入当前 PR |
 
-本版描述的代码已在 Liccol/vllm-ascend 的 packed-vllm-loop-reuse 分支推送至 e5b128e35。当前 PR 只做复用和既有行为兼容，不包含测试对照中的新增跨 chunk event/record_stream 保护。
+本版描述的代码已在 Liccol/vllm-ascend 的 packed-vllm-loop-reuse 分支推送至 773c8947e。当前 PR 只做复用和既有行为兼容，不包含测试对照中的新增跨 chunk event/record_stream 保护。
 
 
 ## 附录 A：HCCL 异常清理边界
 
-附图 A 描述本地 `_hccl_group` 的 finally；正常返回也会进入，不能把它只看成 vLLM 正常结尾 drain 的别名。
+附图 A 描述本地 `_hccl_group` 的 finally；**仅当本次调用携带异常时才进入**。正常返回时本地 finally 直接跳过——vLLM 原 producer/consumer 的正常结尾已经 drain 全部 slot，重复同步没有收益（图 3A 的 EOF drain 即为唯一正常路径同步）。
 
 ```mermaid
 flowchart TD
-    EXIT[离开 vLLM 循环<br/>正常返回或携带 body_error] --> FIN[本地 finally：逐一 drain 所有登记 streams]
+    EXIT[离开 vLLM 循环<br/>正常返回或携带 body_error] --> OKEXIT{本次调用出现异常？}
+    OKEXIT -->|否| DONE[直接返回<br/>正常 drain 已由上游完成]
+    OKEXIT -->|是| FIN[本地 finally：逐一 drain 所有登记 streams]
     FIN --> SYNC[尝试当前 slot stream.synchronize]
     SYNC --> OK{该 slot 同步成功？}
     OK -->|是| NEXT{还有 slot？}
@@ -824,7 +808,7 @@ flowchart TD
     KEEP --> NEXT
     NEXT -->|是| SYNC
     NEXT -->|否| ERROR{存在 cleanup_error？}
-    ERROR -->|否| ORIGINAL[保持正常返回或原 body_error]
+    ERROR -->|否| ORIGINAL[保持原 body_error]
     ERROR -->|是| LOG["logger.error 记录保留槽位与字节数<br/>（日志调用被 suppress(Exception) 保护）"]
     LOG --> PRIORITY{没有 body_error<br/>或 cleanup 的终止信号优先级更高？}
     PRIORITY -->|是| RAISE[抛出 cleanup_error]
