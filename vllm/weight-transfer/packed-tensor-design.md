@@ -1,6 +1,6 @@
 # Packed tensor 继承对照
 
-文档版本：**v1.0.10**。版本记录见 [CHANGELOG.md](CHANGELOG.md)；v1.0.8 及以前的流程详解、图表与真机验证记录见 [versions/](versions/README.md)。
+文档版本：**v1.0.11**。版本记录见 [CHANGELOG.md](CHANGELOG.md)；v1.0.8 及以前的流程详解、图表与真机验证记录见 [versions/](versions/README.md)。
 
 ## 1. 背景：可控范围内继承上游 vLLM 实现
 
@@ -96,3 +96,80 @@ flowchart TB
     AH -. "NPU-only 适配" .-> TW
     AP & AC -. "仅失败路径" .-> AO
 ```
+
+## 4. 四个方法逐环节对照：HCCL producer / consumer 与 IPC producer / consumer
+
+本章按“环节 | 上游 vLLM | vllm-ascend | 差异性质”逐环节对比四个入口方法，差异性质分三档：**一致**（随继承直接复用）、**适配**（可本地包装解决）、**硬差异**（上游写死了 CUDA 专属调用或协议，无法包装绕过）。结论由硬差异数量决定继承与否。
+
+### 4.1 HCCL producer：`packed_nccl_broadcast_producer` ↔ `packed_broadcast_producer`
+
+| 环节 | vLLM（24420b7a） | vllm-ascend（260e4c3c3） | 差异性质 |
+| --- | --- | --- | --- |
+| 参数校验 | 无 | `buffer_size_bytes` / `num_buffers` 正数校验 | 增强 |
+| stream 获取 | `_get_streams(torch.accelerator.current_device_index(), n)`（@cache） | 相同，且以同一键预热缓存 | 一致 |
+| slot 轮转 / in_flight | 保留在途 chunk 引用防提前释放 | 相同（随主循环继承） | 一致 |
+| 打包 | `pack_tensors(iterator, post_iter_func, size)`，回调无校验 | 相同；`post_iter_func` 经 `_checked_callback` 校验 dtype/numel | 适配 |
+| 通信 | `group.broadcast(chunk.packed_tensor, src)`（PyNcclCommunicator） | 同签名 transport：`_HCCLPackedGroup` 先 flush torch_npu 异步队列、broadcast 前后双同步、登记每 slot buffer | 适配 |
+| stream 上下文 | `with torch.cuda.stream(...)` | 依赖 `torch_cuda_wrapper` 映射为 npu stream | 适配 |
+| 结尾清理 | 无条件 drain 所有 slot | 正常路径交给上游 drain；仅异常时本地保留清理（护栏 UT 钉住上游 drain 存在） | 适配 |
+
+**结论**：主循环、轮转、打包完全一致，差异全部是可包装的适配项 → ✅ 委托继承。
+
+### 4.2 HCCL consumer：`packed_nccl_broadcast_consumer` ↔ `packed_broadcast_consumer`
+
+| 环节 | vLLM | vllm-ascend | 差异性质 |
+| --- | --- | --- | --- |
+| metadata 迭代 | 直接 `next(iterator)` | `metadata()` 生成器逐项负 shape 校验 | 增强 |
+| 接收 buffer | `torch.empty(sizes, device=device)`，device 默认 `"cuda"` | 显式传 `device=f"npu:{...}"` | 适配 |
+| 事件链 | `prev_received` wait/record + `record_stream(*streams, caller_stream)` | 相同（随主循环继承，真机已验证） | 一致 |
+| 解包回调 | `post_unpack_func(unpack_tensor(packed, ...))` 直接传 views | `_owning_post_unpack` 包装：views 逐项 clone 后转交（独立存储契约） | 适配 |
+| slot 完成 | `slot_done` event + 下轮 synchronize（避开 ROCm 共享队列） | 相同 | 一致 |
+| 结尾清理 | 无条件 drain | 仅异常路径本地 drain | 适配 |
+
+**结论**：除独立存储包装与 device 参数外全部一致 → ✅ 委托继承。读序缺口在真实 HCCL 时序下未复现（v1.0.8 快照 5.4）。
+
+### 4.3 IPC producer：`packed_ipc_producer` ↔ `packed_npu_ipc_producer`
+
+| 环节 | vLLM | vllm-ascend | 差异性质 |
+| --- | --- | --- | --- |
+| 共享 buffer | `torch.empty(size, device="cuda")` | `torch.empty(size, device="npu")` | **硬差异**（device 字符串写死，wrapper 不覆盖） |
+| 句柄导出 | `reduce_tensor` → 消费端 `rebuild_cuda_tensor` 重建 | `reduce_tensor` 存 args，约定消费端用 `rebuild_npu_tensor` | **硬差异** |
+| 分包 / copy | contiguous → view(uint8) → copy_；超限 ValueError | 逐行相同 | 一致 |
+| 同步 | `torch.accelerator.current_stream().synchronize()` | `torch.npu.current_stream().synchronize()` | 适配 |
+| 回调 | `post_iter_func` 原样 | `_checked_callback` 校验 | 增强 |
+| chunk 协议 | yield `PackedIpcChunk` dataclass | yield dict（跨进程协议） | **硬差异**（换协议需两端同版本升级，零功能收益） |
+| 空 chunk | `if total_bytes:` 全零元素 chunk 不发送 | `if names:` 全零元素 chunk 仍发送元数据 | 语义差异 |
+
+**结论**：分包与 copy 核心一致，但 device 字符串与 yield 协议是硬差异 → ❌ 本地自写（语义对齐，共享 `_checked_callback`）。
+
+### 4.4 IPC consumer：`packed_ipc_consumer` ↔ `packed_npu_ipc_consumer`
+
+| 环节 | vLLM | vllm-ascend | 差异性质 |
+| --- | --- | --- | --- |
+| UUID 解析 | `torch.cuda.get_device_properties(i).uuid` | 调用方传入 `physical_npu_id` | **硬差异**（NPU 无等价 API） |
+| 重建 | `rebuild_cuda_tensor`（CUDA C 级）+ `PackedBufferImporter` 缓存 | `rebuild_npu_tensor`（torch_npu，懒加载）+ device_index / 参数长度校验 | **硬差异** |
+| 句柄查找 | UUID not in handle → ValueError | 相同 | 一致 |
+| 元数据校验 | `getattr(torch, dn)` 解析 dtype | 同 + isinstance(dtype) / 四表长度一致 / 负 shape / content_size 校验 | 增强 |
+| 截断 | `packed[:content_size]` | 相同 | 一致 |
+| 解包 + clone | `unpack_tensor` + 逐项 clone | 相同（直接调用上游 `unpack_tensor`） | 一致 |
+| refcount 防泄漏 | importer 保证一次 export 配一次释放 | 未引入；NPU 侧独立评估，不混入本 PR | 硬差异 |
+
+**结论**：解包与 clone 一致，但 UUID 解析和 rebuild 是 CUDA 专属 → ❌ 本地自写。
+
+### 4.5 对照总览
+
+```mermaid
+flowchart TB
+    subgraph HCCL["HCCL 路径：硬差异 0，全部可适配"]
+        direction LR
+        HP["producer<br/>硬差异 0<br/>适配 3 · 一致 3"] -->|"✅ 委托继承"| HP2["packed_broadcast_producer"]
+        HC["consumer<br/>硬差异 0<br/>适配 2 · 一致 3 · 增强 1"] -->|"✅ 委托继承"| HC2["packed_broadcast_consumer"]
+    end
+    subgraph IPC["IPC 路径：CUDA 专属硬差异"]
+        direction LR
+        IP["producer<br/>硬差异 3（device=cuda / dataclass 协议 / 句柄重建约定）<br/>一致 2 · 适配 1 · 增强 1"] -->|"❌ 本地自写"| IP2["packed_npu_ipc_producer"]
+        IC["consumer<br/>硬差异 3（get_device_properties / rebuild_cuda_tensor / importer）<br/>一致 3 · 增强 1"] -->|"❌ 本地自写"| IC2["packed_npu_ipc_consumer"]
+    end
+```
+
+**总结论**：继承与否由硬差异决定——HCCL 两个方法没有任何硬差异（device 由参数传入、通信接口同签名、事件链可复用），全部环节要么一致要么可本地包装，因此整体委托继承；IPC 两个方法每条都有 3 处 CUDA 专属硬差异（device 字符串、rebuild 函数、UUID 解析/协议类型），包装成本高于自写，因此本地实现、仅在解包/校验/分包等可共享环节复用上游。

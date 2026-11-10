@@ -1,5 +1,11 @@
 # Packed tensor 文档版本记录
 
+## v1.0.11
+
+- 新增第 4 章“四个方法逐环节对照”：HCCL producer/consumer 与 IPC producer/consumer 按“环节 | vLLM | vllm-ascend | 差异性质（一致/适配/硬差异）”逐环节对比，每节给出继承结论，4.5 节以 mermaid 总览图汇总硬差异数量。
+- 结论：HCCL 两方法硬差异为 0 → 委托继承；IPC 两方法各 3 处 CUDA 专属硬差异（device 字符串、rebuild 函数、UUID 解析/协议类型）→ 本地自写、可共享环节复用上游。
+- 源码依据：vLLM main 24420b7a 源码逐行核对（producer L146-193、consumer L196-296、IPC L313-491）；保留 v1.0.10 快照。
+
 ## v1.0.10
 
 - 新增 3.1 继承关系图（mermaid）：以函数级委托/复用箭头呈现两侧方法关系，明确标注 4 条继承路径（HCCL producer/consumer 委托、IPC consumer 复用解包、_hccl_group 复用 stream 缓存）、上游 IPC 未继承区与 torch_cuda_wrapper 适配关系；明确本文档不涉及类继承。
