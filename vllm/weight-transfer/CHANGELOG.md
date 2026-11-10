@@ -1,5 +1,10 @@
 # Packed tensor 文档版本记录
 
+## v1.0.10
+
+- 新增 3.1 继承关系图（mermaid）：以函数级委托/复用箭头呈现两侧方法关系，明确标注 4 条继承路径（HCCL producer/consumer 委托、IPC consumer 复用解包、_hccl_group 复用 stream 缓存）、上游 IPC 未继承区与 torch_cuda_wrapper 适配关系；明确本文档不涉及类继承。
+- 保留 v1.0.9 独立 Markdown 快照。
+
 ## v1.0.9
 
 - 结构重写：按“背景与继承原则 → 方法清单对照 → 逐方法继承判定”三节组织，取代原五章节流程详解；主文档从 829 行精简至约 110 行。

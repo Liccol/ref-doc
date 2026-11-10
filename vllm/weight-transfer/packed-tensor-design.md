@@ -1,6 +1,6 @@
 # Packed tensor 继承对照
 
-文档版本：**v1.0.9**。版本记录见 [CHANGELOG.md](CHANGELOG.md)；v1.0.8 及以前的流程详解、图表与真机验证记录见 [versions/](versions/README.md)。
+文档版本：**v1.0.10**。版本记录见 [CHANGELOG.md](CHANGELOG.md)；v1.0.8 及以前的流程详解、图表与真机验证记录见 [versions/](versions/README.md)。
 
 ## 1. 背景：可控范围内继承上游 vLLM 实现
 
@@ -61,3 +61,38 @@ Ascend 侧原本自有一套 packed weight transfer 实现（449 行，含 HCCL 
 | `packed_ipc_consumer` | ❌ 不继承，自写 `packed_npu_ipc_consumer` | 硬障碍：① `torch.cuda.get_device_properties(device_index).uuid` 无 NPU 等价 API（物理 NPU UUID 由调用方传入）；② `rebuild_cuda_tensor` 不可用，改用 torch_npu 的 `rebuild_npu_tensor`（含 device_index 覆写与参数校验）。其余逻辑（`content_size` 截断、`unpack_tensor` + clone）与上游一致，其中 `packed[:content_size]` 防御已加 |
 
 **汇总**：上游 11 个符号中，6 个完全/间接继承，2 个委托继承（含 NPU 适配包装），3 个 IPC 相关因 CUDA 专属调用或协议差异无法直接继承，由 2 个自写函数 + dict 协议替代，其中可共享的解包与校验逻辑已复用上游。
+
+### 3.1 继承关系图
+
+```mermaid
+flowchart TB
+    subgraph ASC["vllm-ascend packed_tensor.py（344 行，260e4c3c3）"]
+        AP["+ packed_broadcast_producer()"]
+        AC["+ packed_broadcast_consumer()"]
+        AI2["+ packed_npu_ipc_consumer()"]
+        AI1["+ packed_npu_ipc_producer()"]
+        AH["- _hccl_group / _HCCLPackedGroup"]
+        AO["- _owning_post_unpack / _checked_callback<br/>- _reject_negative_shape / _drain_packed_streams"]
+    end
+    subgraph UP["vllm packed_tensor.py（491 行，24420b7a / 4ba787ec）"]
+        UP1["packed_nccl_broadcast_producer()"]
+        UP2["packed_nccl_broadcast_consumer()"]
+        UP3["unpack_tensor()"]
+        UP4["_get_streams() @cache"]
+        UP5["pack_tensors() / PackedChunk / DEFAULT_* 常量"]
+        subgraph NI["未继承（CUDA 专属 / 协议差异）"]
+            N1["packed_ipc_producer() / packed_ipc_consumer()<br/>PackedBufferImporter / PackedIpcChunk"]
+        end
+    end
+    TW["torch_cuda_wrapper()（worker/v2/utils.py）<br/>进程级 cuda→npu，不恢复"]
+
+    AP -- "① 委托主循环" --> UP1
+    AC -- "② 委托主循环 + _owning_post_unpack 独立存储" --> UP2
+    AI2 -- "③ 复用解包" --> UP3
+    AH -- "④ 复用（缓存键对齐 accelerator）" --> UP4
+    AI1 -. "不调用上游；本地自写，语义对齐" .-> NI
+    UP1 -. "循环内部使用" .-> UP5
+    UP2 -. "循环内部使用" .-> UP3
+    AH -. "NPU-only 适配" .-> TW
+    AP & AC -. "仅失败路径" .-> AO
+```
