@@ -1,6 +1,6 @@
 # Packed tensor 方法、流程与复用设计
 
-文档版本：**v1.0.7**。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+文档版本：**v1.0.8**。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 1. 阅读基准与方法清单
 
@@ -13,13 +13,13 @@
 | vLLM main 配套 | `24420b7a341af37a9bc3186e6fc6062512e0aa58` | 主要流程说明 |
 | vLLM v0.33.0 | `4ba787ec9959e566d3b587a796dff07673324da5` | 双版本差异说明 |
 | Ascend main 原实现 | `37854b83ed4c91f90dc609d62d1e90e351005315` | 识别必须保留的原有功能 |
-| Ascend 当前重构实现 | `packed-vllm-loop-reuse`，已提交并推送 `773c8947eda1dc7c7586abdd4fd04ada056fa962` | 本文“当前 Ascend 流程”的主体 |
+| Ascend 当前重构实现 | `packed-vllm-loop-reuse`，已提交并推送 `260e4c3c3e6064b45a0e0a576b06ee55be25cba2` | 本文“当前 Ascend 流程”的主体 |
 
-“当前 Ascend”以已推送的 773c8947e 为准：HCCL 调用 vLLM 原循环；IPC 保留本地固定容量分包、NPU 句柄校验与重建，共用 `_checked_callback`；独立存储由 HCCL 侧的 `_owning_post_unpack` 回调包装和 IPC 侧的本地 clone 提供，**不再重绑定任何 vLLM 模块属性**。正常路径 drain 委托上游，仅失败路径执行本地保留清理。没有新增跨 chunk callback event 或额外 record_stream 修复；这不表示跨 chunk 问题已经解决。
+“当前 Ascend”以已推送的 260e4c3c3 为准：HCCL 调用 vLLM 原循环；IPC 保留本地固定容量分包、NPU 句柄校验与重建，共用 `_checked_callback`；独立存储由 HCCL 侧的 `_owning_post_unpack` 回调包装和 IPC 侧的本地 clone 提供，**不再重绑定任何 vLLM 模块属性**。正常路径 drain 委托上游，仅失败路径执行本地保留清理。没有新增跨 chunk callback event 或额外 record_stream 修复；这不表示跨 chunk 问题已经解决。260e4c3c3 相比 773c8947e 仅新增 `torch_cuda_wrapper` 的 docstring（注明进程级、不恢复语义），无行为变化。
 
 主要源码：[vLLM 配套 packed_tensor.py](https://github.com/vllm-project/vllm/blob/24420b7a341af37a9bc3186e6fc6062512e0aa58/vllm/distributed/weight_transfer/packed_tensor.py)、[vLLM v0.33.0 对应文件](https://github.com/vllm-project/vllm/blob/4ba787ec9959e566d3b587a796dff07673324da5/vllm/distributed/weight_transfer/packed_tensor.py)、[Ascend main 原文件](https://github.com/vllm-project/vllm-ascend/blob/37854b83ed4c91f90dc609d62d1e90e351005315/vllm_ascend/distributed/weight_transfer/packed_tensor.py)。
 
-源码链接均固定到 commit。[当前 Ascend 实现](https://github.com/Liccol/vllm-ascend/blob/773c8947eda1dc7c7586abdd4fd04ada056fa962/vllm_ascend/distributed/weight_transfer/packed_tensor.py)是本版逐方法对照的依据。v0.32.0 仅属于历史验证，不再是本版当前 release 配套。
+源码链接均固定到 commit。[当前 Ascend 实现](https://github.com/Liccol/vllm-ascend/blob/260e4c3c3e6064b45a0e0a576b06ee55be25cba2/vllm_ascend/distributed/weight_transfer/packed_tensor.py)是本版逐方法对照的依据。v0.32.0 仅属于历史验证，不再是本版当前 release 配套。
 
 ### 1.2 vLLM 文件中有哪些方法
 
@@ -134,7 +134,7 @@ flowchart LR
 flowchart TD
     ENGINE["[E] hccl_engine.py"] --> ENTRY["[A] packed_broadcast_producer / consumer<br/>入口校验；consumer 侧包 owning 回调，见图 2B"]
     ENTRY --> CTX["[A] _hccl_group<br/>用 accelerator 设备索引预热上游 stream 缓存；<br/>仅失败路径 finally drain"]
-    CTX --> WRAP["[E] torch_cuda_wrapper<br/>已有 CUDA API 到 NPU 的转发"]
+    CTX --> WRAP["[E] torch_cuda_wrapper<br/>CUDA API 到 NPU 的转发；<br/>进程级、退出不恢复（docstring 已注明）"]
     CTX --> STREAMS["[V] _get_streams<br/>同一设备和 slot 数复用缓存"]
     ENTRY -->|直接调用，不复制函数体| LOOP["[V] packed_nccl_broadcast_producer / consumer<br/>分包与接收 / slot 轮转 / 自带依赖 / 正常 drain"]
     LOOP --> STREAMS
@@ -163,7 +163,7 @@ flowchart TD
 
 图 2A / 2B 的两侧影响范围：
 
-- `torch_cuda_wrapper` 修改进程级 `torch.cuda` 的 stream/event/graph 等 API，退出后不恢复；当前按 NPU-only 约束复用该已有行为。它不把 HCCL 改成 NCCL，也不覆盖 `torch.accelerator`。
+- `torch_cuda_wrapper` 修改进程级 `torch.cuda` 的 stream/event/graph 等 API，退出后不恢复；该语义已在函数 docstring 中注明（260e4c3c3），当前按 NPU-only 约束复用这一既有行为。它不把 HCCL 改成 NCCL，也不覆盖 `torch.accelerator`。
 - `_owning_post_unpack` 只是我们传给原循环的回调包装，随调用结束即弃，不修改任何模块属性；views→clone 的顺序意味着解包结果先经 vLLM 原函数、再在包装内取得独立 storage。
 
 IPC 复用 callback 验证和 `unpack_tensor` 的 dtype/shape 恢复，clone 由 consumer 本地完成；**未委托 vLLM IPC producer、consumer 或 importer**。`_get_streams`、`pack_tensors` 等不新增本地同名副本。
@@ -700,10 +700,10 @@ HCCL 数据结构和常量直接用；IPC 暂不为了结构统一额外做 data
 | Ascend `distributed/weight_transfer/packed_tensor.py` | HCCL 薄入口和设备边界、原清理保障、本地 NPU IPC | 修改 |
 | Ascend `distributed/weight_transfer/hccl_engine.py` | 建组、更新编排、调用本地广播入口 | 保持 main 原样，包括注释 |
 | Ascend `distributed/weight_transfer/npu_ipc_engine.py` | 生成 NPU 身份、IPC engine 编排、调用本地 IPC 入口 | 保持 main 原样 |
-| Ascend 平台 patch 文件、worker/v2/utils.py | 平台兼容与现有 CUDA→NPU wrapper | 文件保持 main 原样；仅从 packed 入口调用现有 wrapper |
+| Ascend 平台 patch 文件、worker/v2/utils.py | 平台兼容与现有 CUDA→NPU wrapper | utils.py 已修改：仅为 `torch_cuda_wrapper` 补充“进程级、不恢复”docstring（260e4c3c3），无行为变化；packed 入口仍只调用现有 wrapper |
 | `tests/ut/distributed/weight_transfer/test_packed_tensor.py` | 既有契约回归和模块作用域检查 | 修改 |
 
-按 NPU-only 进程约束，当前直接复用 `vllm_ascend.worker.v2.utils.torch_cuda_wrapper()`；删除 packed 自己的两个 API 代理类，不再替换 vLLM packed 模块的 torch 引用。现有 wrapper 会替换进程级 torch.cuda 的 stream/event/graph 等属性，退出 with 后不恢复；这是接受的既有行为，不是局部临时替换。独立 trainer 通过 packed 入口同样安装该适配。此前为 IPC 复用尝试的 empty 重定向和 reduce_tensor hook 仍不保留。
+按 NPU-only 进程约束，当前直接复用 `vllm_ascend.worker.v2.utils.torch_cuda_wrapper()`；删除 packed 自己的两个 API 代理类，不再替换 vLLM packed 模块的 torch 引用。现有 wrapper 会替换进程级 torch.cuda 的 stream/event/graph 等属性，退出 with 后不恢复；这是接受的既有行为，不是局部临时替换，且该不可恢复语义已写入函数 docstring，避免被当作通用可逆 context manager 复用。独立 trainer 通过 packed 入口同样安装该适配。此前为 IPC 复用尝试的 empty 重定向和 reduce_tensor hook 仍不保留。
 
 ### 4.2 已落地的公共工具关系
 
@@ -753,26 +753,34 @@ main 已将 E2E 公共逻辑迁移到 `tests/e2e/common/rlhf/weight_transfer/`�
 
 修改文件 Ruff 和 diff 检查通过。全量 format.sh ci 已尝试：actionlint 按约定跳过，另 5 项检查受 Windows 的 /bin/bash、shellcheck 或路径环境限制，没有宣称全量检查通过。
 
-### 5.4 NPU 解包完整性与跨 chunk 边界
+### 5.4 NPU 验证：解包完整性与跨 chunk 边界
 
-在测试 NPU 上，对 v1.0.6 的 e5b128e35（owning-unpack hook 版本）做了小规模探针。这里使用真实 NPU tensor、算子、stream、event 和 allocator；HCCL 广播由同 stream 的 copy 模拟，未执行真实 HCCL collective、完整模型 E2E 或多进程 IPC。v1.0.7 把 clone 时机从“unpack 前的字节 clone”改为“unpack 后的回调内 clone”，clone 的读序缺口机制相同，但探针数据未按新实现重跑，合并前需按 773c8947e 重做最小用例。
+验证分两个阶段，两阶段的时序前提不同，结论不能互相替代。
 
-| 验证场景 | 当前代码 | 仅测试进程增加 event + clone record_stream 的对照 |
+**第一阶段：构造性时序探针（v1.0.6 的 e5b128e35）。** 使用真实 NPU tensor、算子、stream、event 和 allocator，但 HCCL 广播由同 stream 的 copy 模拟，并通过人为延迟构造跨 chunk 竞争。它只证明“无读序依赖时机制上可以失败”，**不适用于真实 HCCL 时序**：
+
+| 验证场景（模拟环境） | 模拟实现 | 增加事件依赖的对照 |
 | --- | --- | --- |
 | 混合 dtype、标量、零元素；覆盖并释放原 buffer 后核对解包值、形状、dtype 和数量 | 20/20 轮通过 | 未重复该项 |
-| 前一个 chunk 的 owning clone 延迟，后一 slot 读取 | 10/10 轮数据错误 | 10/10 轮通过 |
+| 前一 chunk 的 owning clone 被人为延迟，后一 slot 读取 | 10/10 轮数据错误 | 10/10 轮通过 |
 | 引用释放后，其他 slot 分配并覆盖相同大小的 storage | 10/10 轮数据错误；每轮观察到 4 或 6 次危险地址复用 | 10/10 轮通过，危险复用为 0 |
 
 后两项覆盖 2/3 个 slots，各 5 轮。对照仅在测试进程中增加“前一 callback 后记录 event、后一 unpack 等待”和“clone 记录 reader streams”，没有写入当前生产代码。
+
+**第二阶段：真机最小用例（v1.0.8 补记，代码为 773c8947e）。** 2 卡 Ascend910C A3、CANN 9.2.0、torch 2.10.0 + torch_npu 2.10.0，`dist` hccl backend，2 rank 真实 HCCL 广播，PR 实现与上游 24420b7a 对照，2MB 与 16MB chunk、`num_buffers=2`。结果：
+
+- **真机 gate 通过**：`torch.accelerator` 的 `current_device_index` / `current_stream`（C 级实现，不走 Python 委托）在 NPU 上正常解析；`torch.Event`、`record_stream`、跨 stream copy 均可用。上游循环自身依赖的 NPU 可用性顾虑被排除。
+- **端到端正确**：缓存键统一后 `streams.index` 自第一个 chunk 起解析正常，端到端数据校验全部通过。
+- **读序缺口未复现**：跨 chunk 早期读在 2MB 与 16MB chunk 下均 3/3 轮正确。第一阶段的 10/10 错误是构造性时序的产物：真实 HCCL 时序下 caller-stream 读始终安全——clone 约等于一个 chunk 带宽的拷贝，在下一次通信间隔内完成。
+- **wait_event 防御对照**：测试进程中加“clone 后记录 event + caller stream wait_event”无死锁、无回归，作为可选加固保留讨论，未写入生产代码。注意：generic `torch.Stream`（accelerator API）与 `npu.Stream` 混用时 wait_event 会静默失效，任何后续修复实现必须统一使用 `torch.npu.*` 类型。
 
 因此必须区分：
 
 - 独立存储成立：原 packed buffer 被覆盖，不会改变已经完成的 clone。
 - raw storage 的复用保护成立：两套配套（main 与 v0.33.0）的 consumer 都有 receive-ready event 链，并对 raw buffer 记录全部接收 streams 和 caller stream 的 record_stream，allocator 不会提前复用 raw storage。
-- 异步读取的读序尚不成立：clone 产生的新 storage 不在上述 record_stream 名单内，clone 的设备读也没有等待事件；loader 若在 caller 或其他 stream 上读取 clone，读序无保证。
-- Python loader 保留引用也不等于设备已读完。当前 layerwise 会把参数 bound_args 存入 loaded_weights，重放提交设备操作后 reset 释放引用；跨 stream 就绪及释放后异步读取仍需正确依赖。
-
-这些机制探针错误与前述 CPU UT 的 179 passed 并不矛盾：CPU 假件不能验证实际设备时序。此结果不能外推为所有真实模型 E2E 一定失败，也不能证明真实多进程 IPC 已发生相同问题；它已经足以说明“继承 vLLM 循环”不能作为当前 Ascend 跨 chunk 问题已解决的依据。
+- 读序缺口在真实 HCCL 时序下未复现，但机制上仍无显式事件保证：clone 的新 storage 不在 record_stream 名单内，其安全依赖“clone 在下一通信间隔内完成”的时序推断。负载、拓扑或 slot 数变化时需重新评估。
+- Python loader 保留引用不等于设备已读完；跨 stream 就绪及释放后异步读取的正确依赖仍需按此理解。
+- 未覆盖范围：完整模型 E2E、多进程 IPC、多节点与更大规模并发尚未验证。
 
 
 ### 5.5 当前方案与后续候选
@@ -780,16 +788,17 @@ main 已将 E2E 公共逻辑迁移到 `tests/e2e/common/rlhf/weight_transfer/`�
 | 内容 | 当前状态 | 后续讨论边界 |
 | --- | --- | --- |
 | HCCL 回调包装 owning clone / IPC 本地 clone | 已落地（v1.0.7 重写，替代 owning-unpack hook） | 保持 main 既有独立存储，不宣称时序修复完成；包装随调用即弃，不修改模块属性 |
-| stream 缓存键与上游统一 | 已落地（`torch.accelerator.current_device_index`） | 前提是真机上 torch.accelerator 能解析 NPU，需真机最小用例验证 |
+| stream 缓存键与上游统一 | 已落地（`torch.accelerator.current_device_index`） | 真机已验证 accelerator C 级 API 在 NPU 正常解析（见 5.4 第二阶段） |
 | 正常路径 drain 委托 | 已落地（仅异常路径走本地 drain） | 依赖上游正常结尾 drain 的存在；配套签名护栏 UT 会在此前提被破坏时提前报错 |
 | 上游符号护栏 UT | 已落地 | 签名、consumer `device` 参数、正常 drain 注释，pin bump 即红 |
+| wrapper 语义文档化 | 已落地（260e4c3c3，`torch_cuda_wrapper` docstring） | “挪中性模块”未采用：NPU-only 进程内无行为差异，仅注明不可恢复语义 |
 | IPC producer 公共校验 | 已落地 | 不扩展到整个 IPC 发送循环 |
 | HCCL 原生 views | 未采用 | 有望直接使用 vLLM 对 raw buffer 的保护，但会改变独立存储契约；需处理对齐并验证实际 loader 及派生计算 |
-| clone 读序修复 | 未采用 | 若真机最小用例证实缺口，在 `_owning_post_unpack` 内补 caller stream 事件等待，纯本地几行 |
+| clone 读序修复 | 未采用 | 真机最小用例未复现缺口（见 5.4）；wait_event 对照无死锁无回归，留作可选加固，实现须统一 `torch.npu.*` 类型 |
 | IPC metadata 数据结构 | 未调整 | 仅在确实减少维护成本时考虑 PackedIpcChunk，不改变现有字典协议 |
 | IPC importer 缓存 | 不在本次复用范围 | 保持独立问题和独立修复，不混入当前 PR |
 
-本版描述的代码已在 Liccol/vllm-ascend 的 packed-vllm-loop-reuse 分支推送至 773c8947e。当前 PR 只做复用和既有行为兼容，不包含测试对照中的新增跨 chunk event/record_stream 保护。
+本版描述的代码已在 Liccol/vllm-ascend 的 packed-vllm-loop-reuse 分支推送至 260e4c3c3。当前 PR 只做复用和既有行为兼容，不包含验证对照中的新增跨 chunk event/record_stream 保护。
 
 
 ## 附录 A：HCCL 异常清理边界

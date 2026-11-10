@@ -1,5 +1,13 @@
 # Packed tensor 文档版本记录
 
+## v1.0.8
+
+- wrapper 语义文档化：`torch_cuda_wrapper` 补充 docstring，注明进程级重绑定、退出不恢复，避免被当作通用可逆 context manager 复用（检视 P1-4 收尾；代码 260e4c3c3，无行为变化）。图 2A 节点、2.4 作用域说明、4.1 文件边界表同步更新。
+- 5.4 改为两阶段验证结构：第一阶段构造性时序探针（同 stream copy 模拟 HCCL）的 10/10 错误结论明确限定为“模拟环境、人为延迟时序”，不适用于真实 HCCL。
+- 5.4 补记第二阶段真机最小用例（773c8947e，2×Ascend910C A3、CANN 9.2.0、torch/torch_npu 2.10.0，2 rank 真实 HCCL）：accelerator C 级 API / Event / record_stream / 跨 stream copy 真机 gate 通过；端到端数据校验通过；跨 chunk 读序缺口在真实 HCCL 时序下未复现（2MB 与 16MB chunk 各 3/3 正确），此前的“读序无保证”结论修正为“真实时序未复现、机制上仍无显式事件保证”。
+- wait_event 防御对照通过（无死锁无回归），留作可选加固并注明 generic `torch.Stream` 与 `npu.Stream` 混用会静默失效；未写入生产代码。
+- 5.5 表格同步：stream 缓存键的真机前提已验证；新增“wrapper 语义文档化”条目；clone 读序修复的后续讨论边界更新。保留 v1.0.7 独立 Markdown 快照。
+
 ## v1.0.7
 
 - 设计变更：删除 owning-unpack hook（进程级模块属性重绑定），独立存储改由 HCCL 侧 `_owning_post_unpack` 回调包装与 IPC 侧本地 clone 提供；先 unpack 得到 views、再逐项 clone，未对齐 offset 由原 unpack 的 contiguous 拷贝处理。
