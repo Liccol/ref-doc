@@ -1,6 +1,6 @@
 # Packed tensor 继承对照
 
-文档版本：**v1.0.11**。版本记录见 [CHANGELOG.md](CHANGELOG.md)；v1.0.8 及以前的流程详解、图表与真机验证记录见 [versions/](versions/README.md)。
+文档版本：**v1.0.12**。版本记录见 [CHANGELOG.md](CHANGELOG.md)；v1.0.8 及以前的流程详解、图表与真机验证记录见 [versions/](versions/README.md)。
 
 ## 1. 背景：可控范围内继承上游 vLLM 实现
 
@@ -173,3 +173,19 @@ flowchart TB
 ```
 
 **总结论**：继承与否由硬差异决定——HCCL 两个方法没有任何硬差异（device 由参数传入、通信接口同签名、事件链可复用），全部环节要么一致要么可本地包装，因此整体委托继承；IPC 两个方法每条都有 3 处 CUDA 专属硬差异（device 字符串、rebuild 函数、UUID 解析/协议类型），包装成本高于自写，因此本地实现、仅在解包/校验/分包等可共享环节复用上游。
+
+## 5. packed 相关未合入 PR 的影响分析
+
+继承重构（#20676）完成后，仓库中其余 packed weight transfer 未合入 PR 是否还需要改（截至 2026-11-11 检索，简要）：
+
+| PR | 内容 | 继承完成后是否还需要 |
+| --- | --- | --- |
+| #20740 IPC 一次性导入 | NPU IPC 每次重建/释放导致 producer refcount 负数泄漏；引入一次性导入缓存 | **仍需要，不受影响**。与第 4.4 节“importer 不继承、NPU 侧独立修复”的决策吻合，可视为 `PackedBufferImporter` 思想的 NPU 落地；与 #20676 仅需 rebase 协调（同文件不同区域） |
+| #18078 拆分工具与后端 | 把 packed_tensor 序列化/反序列化从 HCCL、NPU IPC 后端拆出（+728/-256，恰好覆盖 #20676 的两个文件） | **需要重大返工**。其拆分对象在继承后结构已变（循环委托上游、IPC 收敛为两个入口函数），与本 PR 直接冲突；需在 #20676 合入后基于新结构重评甚至重写 |
+| #16999 HCCL buffer stream 生命周期 | 旧本地 producer 循环的四项修复：按设备缓存 stream、同 slot stream 打包+广播、在途 buffer 保活、结尾 drain | **被继承取代，可关闭**。上游循环本身就包含这四项（见 4.1）；release 分支同类问题由 #18763 / #20614 覆盖 |
+| #19127 跨 chunk readiness | 基于 hook / 本地循环的跨 chunk event + clone record_stream 方案（+286/-33） | **被继承取代**。hook 已删除、真机最小用例未复现读序缺口（v1.0.8 快照 5.4）；可关闭，或改写为 `_owning_post_unpack` 内几行 wait_event 的可选加固后重提 |
+| #12713 打包前源 stream 同步 | producer 打包读源 tensor 时源可能在 caller stream 在途，仅同步 slot stream 不够（+4/-0） | **仍需要，但补丁位置要改**。缺口在委托后的上游循环中同样存在，4 行修复应改挂到本地入口（`_hccl_group` 进入循环前同步 caller stream），不能继续打在旧本地循环上 |
+| #18763 单 stream 加载（v0.30.0） | release 分支：跨 chunk 加载顺序修复 | 不受影响。release 分支保留本地循环，独立于 main 重构 |
+| #20614 packed 修复 backport（v0.30.0） | release 分支 backport #19164 | 不受影响。同上 |
+
+**合入顺序建议**：先合 #20676（继承基座）→ #12713 按新入口改 4 行重提、#20740 rebase → #18078 基于新结构重评 → 关闭 #16999、#19127（或按可选加固改写）。
