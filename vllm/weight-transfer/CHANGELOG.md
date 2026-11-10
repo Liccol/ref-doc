@@ -1,5 +1,13 @@
 # Packed tensor 文档版本记录
 
+## v1.0.6
+
+- 依据 e5b128e35 代码核对修正图 3A：finally drain 的发起者改为 `_hccl_group`，补充 group 包装登记每 slot 最后通信 buffer 的步骤，标注 EOF 正常 drain 与 finally drain 在正常路径重复同步。
+- 图 5 重画：HCCL 与 IPC 的 clone 节点拆分为两条链各自持有，删除与文字矛盾的合并节点；未修复的"回收复用与异步读"冲突改为双入边冲突节点表达。
+- 图 6 拆为 6A 静态结构与 6B 符号重绑定状态图：模块属性 `unpack_tensor` 标注为可重绑定，安装前/安装后分离，消除双向依赖环引发的"递归"误读。
+- 图 2B 与图 2A 节点命名对齐，标注先幂等安装、后调用的顺序；附图 A 补充 logger.error 记录步骤。
+- 仅修正图表与对应文字，章节结论、源码基准和验证记录不变；保留 v1.0.5 独立 Markdown 快照。
+
 ## v1.0.5
 
 - 增加 UML 静态结构图，列出两侧模块函数、PackedChunk、HCCL 通信包装类和 owning-unpack 闭包。

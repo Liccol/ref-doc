@@ -1,6 +1,6 @@
 # Packed tensor 方法、流程与复用设计
 
-文档版本：**v1.0.5**。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+文档版本：**v1.0.6**。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 1. 阅读基准与方法清单
 
@@ -74,7 +74,7 @@
 | 图 3A / 3B：HCCL 收发时序 | 打包、native 通信、解包和 loader 的提交顺序及等待位置 | 3.4～3.5 |
 | 图 4：IPC 收发时序 | 共享 buffer 的发布、重建、消费与下一次覆盖 | 3.6、3.10 |
 | 图 5：存储与生命周期 | view、clone、loader 引用与设备读取完成的区别 | 3.3、5.4 |
-| 图 6：UML 静态结构 | 模块操作、真实类、闭包及依赖关系，区分类继承与函数委托 | 2.8、3.1～3.5、3.10 |
+| 图 6A / 6B：UML 静态结构与符号重绑定 | 模块操作、真实类、闭包、依赖关系与模块属性重绑定，区分类继承与函数委托 | 2.8、3.1～3.5、3.10 |
 | 附图 A：异常清理 | drain、失败 storage 保留与异常优先级 | 附录 A |
 
 所有图描述第 1.1 节的固定源码，**不是拟议跨 chunk 修复方案**。图中 `[V]` 表示 vLLM 原实现，`[A]` 表示本 PR 的 Ascend packed 适配，`[E]` 表示既有引擎、worker 或模型代码，不在本 PR 修改。
@@ -145,18 +145,20 @@ flowchart TD
     LOOP -->|consumer 解包| UNPACK["模块 unpack_tensor 符号<br/>转入图 2B 的 owning-unpack"]
 ```
 
-**图 2B：公共 owning-unpack 与保留的本地 IPC。** 这里只展开共享路径，不重复 HCCL 通信边界。
+**图 2B：公共 owning-unpack 与保留的本地 IPC。** 这里只展开共享路径，不重复 HCCL 通信边界；节点与图 2A 对应（`HCCL packed 入口` 即图 2A 的 ENTRY，`原 broadcast consumer 循环` 即图 2A 的 LOOP），①② 标注"先幂等安装、后调用"的顺序。
 
 ```mermaid
 flowchart TD
-    IE["[E] npu_ipc_engine.py"] --> IP["[A] packed_npu_ipc_producer<br/>本地分包 / copy / yield"]
-    IP --> CHECK["[A] 与 HCCL 共用 _checked_callback"]
-    IE --> IC["[A] packed_npu_ipc_consumer<br/>校验 / NPU rebuild / 截取有效长度"]
-    HE["[A] HCCL packed 入口"] --> HOOK["[A] _install_owning_unpack<br/>幂等保存原函数并安装模块 hook"]
-    IC --> HOOK
-    HOOK -.->|修改模块属性，持续生效| SYMBOL["vLLM 模块 unpack_tensor 符号"]
-    LOOP["[V] 原 broadcast consumer 循环"] -->|运行时查找| SYMBOL
-    IC -->|显式调用| SYMBOL
+    subgraph IPC路径
+        IE["[E] npu_ipc_engine.py"] --> IP["[A] packed_npu_ipc_producer<br/>本地分包 / copy / yield"]
+        IP --> CHECK["[A] _checked_callback<br/>与 HCCL 共用"]
+        IE --> IC["[A] packed_npu_ipc_consumer<br/>校验 / NPU rebuild / 截取有效长度"]
+    end
+    HE["[A] HCCL packed 入口<br/>= 图 2A 的 ENTRY"] -->|"① 幂等安装"| HOOK["[A] _install_owning_unpack<br/>保存原函数并重绑定模块属性"]
+    IC -->|"① 幂等安装"| HOOK
+    HOOK -.->|"重绑定模块属性，持续生效"| SYMBOL["vLLM 模块 unpack_tensor 符号"]
+    LOOP["[V] 原 broadcast consumer 循环<br/>= 图 2A 的 LOOP"] -->|"运行时查找"| SYMBOL
+    IC -->|"② 安装后显式调用"| SYMBOL
     SYMBOL --> OWN["[A] owning_unpack<br/>split；每段 raw.clone"]
     OWN -->|单 tensor metadata| ORIG["[V] 保存的原 unpack 函数<br/>contiguous / view dtype / view shape"]
 ```
@@ -178,6 +180,7 @@ IPC 仅复用 callback 验证和 owning-unpack 中的原 dtype/shape 恢复；**
 ```mermaid
 sequenceDiagram
     participant TC as [E] trainer CPU
+    participant FIN as [A] _hccl_group finally
     participant VP as [V] producer / pack_tensors
     participant TS as 发送 NPU stream T_i
     participant AG as [A] group 包装
@@ -191,6 +194,7 @@ sequenceDiagram
         VP->>VP: 取参数；callback 验证；记录原 metadata
         VP->>TS: enqueue contiguous / uint8 / cat
         VP->>AG: broadcast 发送 packed buffer
+        AG->>AG: 登记该 slot 最后通信 buffer
         AG->>TS: synchronize：完成打包
         TS-->>AG: 当前发送 buffer 已就绪
         AG->>HC: broadcast(buffer, src, stream=T_i)
@@ -200,12 +204,12 @@ sequenceDiagram
         AG-->>VP: 返回
         Note over VP: 保存 chunk 到 in_flight；切换下一发送 slot
     end
-    VP->>TS: EOF：逐一 synchronize 所有发送 streams
+    VP->>TS: EOF：上游逐一 synchronize 所有发送 streams（正常 drain）
     VP-->>TC: 原 producer 正常返回
-    TC->>TS: 本地 finally 再 drain 所有已登记 streams
+    FIN->>TS: finally 再 drain 所有已登记 streams（与上游 EOF drain 重复同步，见 5.5）
 ```
 
-`buffer_size_bytes` 在这里是 flush 阈值：先加入 tensor，再判断累计大小是否超过阈值。空 iterator 不产生 chunk；阈值不是固定容量上限。包装器在 native HCCL 前后执行保守同步，因此多 slot 不等于已经形成有效通信/计算重叠。
+`buffer_size_bytes` 在这里是 flush 阈值：先加入 tensor，再判断累计大小是否超过阈值。空 iterator 不产生 chunk；阈值不是固定容量上限。包装器在 native HCCL 前后执行保守同步，因此多 slot 不等于已经形成有效通信/计算重叠。图末两条 drain 来源不同：EOF 的正常 drain 来自 vLLM 原 producer，finally drain 来自 `_hccl_group` 的异常清理边界（附录 A），正常路径下两者重复同步，是 5.5 节列出的候选调整。
 
 **图 3B：接收 worker。** 本图以 main 配套为准。为避免把“排队”和“完成”混淆，event 依赖的建立与 host 等待分开标注。
 
@@ -297,7 +301,7 @@ sequenceDiagram
 
 ### 2.7 图 5：buffer、view 与 owning tensor 的存储生命周期
 
-下面是存储关系图，箭头文字区分复制和别名，不表示类继承。每个 clone 是字节存储的 owner；返回的 typed tensor 通常是**该 clone 的 view**，它不再是原 packed buffer 的 view。HCCL 与 IPC 每次调用分别创建自己的 clone，图中合并节点表示共用同一解包逻辑，并非共享同一 clone 实例。
+下面是存储关系图，箭头文字区分复制和别名，不表示类继承。每个 clone 是字节存储的 owner；返回的 typed tensor 通常是**该 clone 的 view**，它不再是原 packed buffer 的 view。HCCL 与 IPC 每次调用分别创建自己的 clone，图中两条链各画一个 clone 节点，仅在共用解包逻辑处汇合，不表示共享同一 clone 实例。
 
 ```mermaid
 flowchart TB
@@ -310,13 +314,16 @@ flowchart TB
         EXPORT[trainer 单个导出 buffer] -->|句柄重建：共享存储| IMPORT[worker 导入映射]
         IMPORT -->|split：别名| IRAW[各 tensor 的 uint8 slice]
     end
-    RAW -->|enqueue clone：复制| CLONE[worker 独立字节 storage<br/>每 tensor 一份，起始 offset 对齐]
-    IRAW -->|enqueue clone：复制| CLONE
-    CLONE -->|vLLM 原 unpack：dtype / shape view| TENSOR[返回的 named tensors<br/>通过 view 持有 clone storage]
+    RAW -->|"enqueue clone：复制（每次调用各自创建）"| CLONEH[HCCL clone storage]
+    IRAW -->|"enqueue clone：复制（每次调用各自创建）"| CLONEI[IPC clone storage]
+    CLONEH --> UNPACK[vLLM 原 unpack：dtype / shape view]
+    CLONEI --> UNPACK
+    UNPACK --> TENSOR[返回的 named tensors<br/>view 持有各自的 clone storage]
     TENSOR -->|Python 引用可被保留| LOADER[worker 模型 loader / layerwise 暂存]
-    LOADER -->|可能在后续 R_j / caller stream 提交读取| READ[设备异步读取]
-    LOADER -->|重放后 reset 可释放引用| FREE[allocator 可能回收 clone storage]
-    FREE -.->|缺少 reader 生命周期保护时可能抢先复用| READ
+    LOADER -->|可能在后续 R_j / caller stream 提交读取| READ[设备异步读取<br/>可能晚于引用释放]
+    LOADER -->|重放后 reset 可释放引用| FREE[allocator 回收 clone storage<br/>可能立即复用同一地址]
+    READ -.-> RISK["⚡ 冲突：缺少 reader 生命周期保护时<br/>回收复用与仍在进行的读重叠<br/>（本 PR 未修复，见 5.4）"]
+    FREE -.-> RISK
 ```
 
 生命周期按三个独立条件审视：
@@ -328,11 +335,13 @@ flowchart TB
 | IPC 导出 buffer / worker 映射 | 暂停中的 generator / worker 本次 rebuild 结果 | 所有 worker 不再读取该 chunk 的共享字节，才可覆盖 | generator 不自行调度消费确认；依赖调用方编排 |
 | owning clone storage | 返回 tensor 的 view、loader 暂存引用 | clone 完成后才能读取；所有异步读结束后才能回收复用 | 独立存储与对齐已保留；未增加 clone 的跨 stream event / record_stream |
 
-**独立存储、数据就绪和生命周期是三个条件。** clone 保证不再别名原 buffer，但 clone 的提交不是完成证明；loader 持有 Python 引用可延长 storage 存活，却不能代替跨 stream 依赖；引用释放后仍可能有设备读在运行。图 5 的虚线只标记未解决风险，不能作为本 PR 已修复该问题的证据。
+**独立存储、数据就绪和生命周期是三个条件。** clone 保证不再别名原 buffer，但 clone 的提交不是完成证明；loader 持有 Python 引用可延长 storage 存活，却不能代替跨 stream 依赖；引用释放后仍可能有设备读在运行。图 5 的冲突节点（⚡）只标记未解决风险，不能作为本 PR 已修复该问题的证据。
 
-### 2.8 图 6：UML 静态结构与复用边界
+### 2.8 图 6A / 6B：UML 静态结构、符号重绑定与复用边界
 
-本图采用 UML 类图记法展示模块、实际类和闭包。`«module»` 方框中的操作是 Python **模块函数**，不是某个虚构父类的方法；这里只列出本次实际使用的 vLLM 成员。模块函数省略参数，签名和行为见第 3 章。`«closure»` 是安装 hook 时生成的局部函数，也不是新增类。
+图 6A 采用 UML 类图记法展示模块、实际类和闭包；图 6B 用状态图单独表达模块属性的重绑定——依赖箭头无法表达"属性指向被替换"这一动态事实，单靠一张类图容易把 `VLLM ⇄ owning` 的两条边误读成递归或循环导入。`«module»` 方框中的操作是 Python **模块函数**，不是某个虚构父类的方法；这里只列出本次实际使用的 vLLM 成员。模块函数省略参数，签名和行为见第 3 章。`«closure»` 是安装 hook 时生成的局部函数，也不是新增类。
+
+**图 6A：静态结构。** 模块属性 `unpack_tensor` 显式标注为可被重绑定的 `Callable`。
 
 ```mermaid
 classDiagram
@@ -347,19 +356,20 @@ classDiagram
         -_checked_callback()
         -_install_owning_unpack()
         -_drain_packed_streams()
+        -_UNSYNCHRONIZED_BUFFERS : list
     }
     class VllmPacked["vLLM packed_tensor.py"] {
         <<module>>
         +packed_nccl_broadcast_producer()
         +packed_nccl_broadcast_consumer()
         +pack_tensors()
-        +unpack_tensor()
+        +unpack_tensor : Callable 可被重绑定
         -_get_streams()
     }
     class HCCLGroup["_HCCLPackedGroup"] {
-        +group
-        +streams
-        +buffers
+        +group : PyHcclCommunicator
+        +streams : list
+        +buffers : list
         +__init__(group, streams)
         +broadcast(tensor, src)
     }
@@ -373,19 +383,33 @@ classDiagram
     }
     class Owning["owning_unpack"] {
         <<closure>>
-        unpack : captured original function
-        +owning_unpack(packed, names, shapes, dtypes, sizes)
+        -captured : 安装前的原 unpack 引用
+        +__call__(packed, names, shapes, dtypes, sizes)
     }
     AscendPacked ..> VllmPacked : 委托广播入口并调用原实现
     AscendPacked ..> HCCLGroup : 创建并传给原广播循环
     VllmPacked ..> HCCLGroup : 运行时调用传入对象的 broadcast
     VllmPacked ..> Chunk : pack_tensors 创建 / producer 持有
     AscendPacked ..> Owning : 幂等创建并安装到模块符号
-    VllmPacked ..> Owning : 安装后经 unpack_tensor 符号调用
-    Owning ..> VllmPacked : 调用闭包保存的原 unpack 函数
+    VllmPacked ..> Owning : 安装后经重绑定的模块属性调用（见 6B）
+    Owning ..> VllmPacked : 调用捕获的安装前函数引用，不查模块符号
 ```
 
-图 6 的虚线箭头是 UML **依赖/使用**关系，不是时序图的“返回”。图中没有空心三角继承箭头，因为当前 packed 层没有新增父子类关系；也没有将 `_HCCLPackedGroup` 画成 NCCL communicator 的子类，它只通过 `broadcast` 方法满足循环的调用接口。
+**图 6B：模块属性重绑定状态图。** 安装前/安装后两个状态分离，闭包与原函数的直连关系单独标注。
+
+```mermaid
+flowchart LR
+    subgraph BEFORE["安装前（import 后初始状态）"]
+        SYM0["模块属性 upstream.unpack_tensor"] --> ORIG["[V] 原 unpack 函数<br/>contiguous / view dtype / view shape"]
+    end
+    subgraph AFTER["安装后（_install_owning_unpack 幂等生效）"]
+        SYM1["模块属性 upstream.unpack_tensor<br/>被重绑定，持续生效"] --> OWN["[A] owning_unpack 闭包<br/>split；每段 raw.clone；再恢复 dtype/shape"]
+        OWN -.->|"捕获的函数引用<br/>（安装前保存，不查模块符号 → 无递归）"| ORIG
+    end
+    BEFORE ==>|"调用一次 _install_owning_unpack"| AFTER
+```
+
+图 6A 的虚线箭头是 UML **依赖/使用**关系，不是时序图的“返回”。图中没有空心三角继承箭头，因为当前 packed 层没有新增父子类关系；也没有将 `_HCCLPackedGroup` 画成 NCCL communicator 的子类，它只通过 `broadcast` 方法满足循环的调用接口。`VLLM ⇄ owning` 两条边的语义不同：安装后 vLLM 循环经重绑定的模块属性调用 owning-unpack；owning-unpack 调用的则是闭包捕获的安装前函数引用，不查模块符号，因此不会递归（见图 6B）。
 
 | 图中关系 | 实际代码及复用方式 | 不应误读为 |
 | --- | --- | --- |
@@ -801,11 +825,12 @@ flowchart TD
     NEXT -->|是| SYNC
     NEXT -->|否| ERROR{存在 cleanup_error？}
     ERROR -->|否| ORIGINAL[保持正常返回或原 body_error]
-    ERROR -->|是| PRIORITY{没有 body_error<br/>或 cleanup 的终止信号优先级更高？}
+    ERROR -->|是| LOG["logger.error 记录保留槽位与字节数<br/>（日志调用被 suppress(Exception) 保护）"]
+    LOG --> PRIORITY{没有 body_error<br/>或 cleanup 的终止信号优先级更高？}
     PRIORITY -->|是| RAISE[抛出 cleanup_error]
     PRIORITY -->|否| ORIGINAL
 ```
 
-同步失败时没有设备完成证明，因此不主动释放已登记的非空通信 buffer。保留列表不设容量上限，仅用于失败路径，并不能让失败的 communicator 恢复可用；反复重试可能耗尽设备内存。它登记的是最后通信 buffer，不是所有 owning clones，也不构成 clone 异步读取的额外保护。
+同步失败时没有设备完成证明，因此不主动释放已登记的非空通信 buffer。保留列表不设容量上限，仅用于失败路径，并不能让失败的 communicator 恢复可用；反复重试可能耗尽设备内存。它登记的是最后通信 buffer，不是所有 owning clones，也不构成 clone 异步读取的额外保护。所有 slot 处理完后若存在 cleanup_error，先经 `logger.error` 记录保留槽位与字节数，再判断异常优先级。
 
 这里的“终止信号优先级更高”具体指：body_error 是普通 `Exception`，cleanup_error 是不属于 `Exception` 的 `BaseException`。存在 body_error 时，普通 cleanup 异常不会覆盖它；不论异常优先级如何，都会尝试 drain 其余 slots。
