@@ -1,5 +1,12 @@
 # Packed tensor 文档版本记录
 
+## v1.0.16
+
+- 2.2 节重构为“PR 修改前 → 修改后”对照：先给出 merge-base `37854b83` 的原自有实现（449 行，6 个符号全本地，含全本地 HCCL 发送/接收循环的内联打包与 clone-first 解包细节），再保留修改后（344 行）清单。
+- 明确修改前核心问题：同名函数是上游循环的语义对齐重写而非复用，上游改动会静默漂移——即本 PR 要解决的维护成本来源。
+- 修改后 IPC 两函数标注复用项（`_checked_callback` / `_reject_negative_shape` / 上游 `unpack_tensor`）。
+- 保留 v1.0.15 快照。
+
 ## v1.0.15
 
 - 新增 4.7 节“CUDA 操作穷举与最终继承边界”：对上游 packed_tensor.py 全部 CUDA 相关操作逐行穷举，分三类——A 类已解决（wrapper/等价 API/真机验证）、B 类 ascend 侧可解决（torch_npu 自动 patch reduce_tensor；**修正**：rebuild_cuda_tensor 经 importer 类继承覆写可解，PackedIpcChunk 非 CUDA 障碍）、C 类无法解决仅 2 处（producer L339 device="cuda" 字面量、consumer L468 get_device_properties().uuid）。

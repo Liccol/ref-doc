@@ -21,14 +21,29 @@
 | `PackedIpcChunk` | dataclass | IPC chunk 元数据 |
 | `PackedBufferImporter` | 类 | 消费侧 IPC 重建缓存（防止跨 chunk refcount 泄漏） |
 
-### 2.2 vllm-ascend `vllm_ascend/distributed/weight_transfer/packed_tensor.py`（344 行，260e4c3c3）
+### 2.2 vllm-ascend `vllm_ascend/distributed/weight_transfer/packed_tensor.py`
+
+**PR 修改前**（merge-base `37854b83`，449 行）：全部本地实现，不调用上游任何符号。
+
+| 符号 | 类型 | 作用 |
+| --- | --- | --- |
+| `DEFAULT_PACKED_BUFFER_SIZE_BYTES` / `DEFAULT_PACKED_NUM_BUFFERS` | 常量 | 本地定义（数值与上游相同，各自维护） |
+| `_drain_packed_streams` + `_UNSYNCHRONIZED_BUFFERS` | 私有 | 失败 drain：保留未同步 storage 到进程退出（PR 前正常/失败路径都走本地 finally） |
+| `packed_broadcast_producer(...)` | 函数 | **全本地 HCCL 发送循环**：自建 `torch.npu.Stream` 列表、手动打包（逐个 `next(iterator)` → `contiguous` → dtype/numel 校验 → `view(uint8)` 累加、超限即截断）、`previous_broadcast_stream` 跨流同步、`group.broadcast(..., stream=...)`、finally 无条件 drain |
+| `packed_broadcast_consumer(...)` | 函数 | **全本地 HCCL 接收循环**：元数据收集（内联负 shape 校验）、本地分配 npu buffer、broadcast + 同步、**内联 `unpack_tensor`**（clone-first：先 clone 修未对齐再 view/reshape，同时提供独立存储）、同 stream 调 `post_unpack_func` |
+| `packed_npu_ipc_producer(...)` | 函数 | 本地 NPU IPC 发送（内联回调校验，逻辑与上游 IPC producer 语义对齐但逐行自写） |
+| `packed_npu_ipc_consumer(...)` | 函数 | 本地 NPU IPC 接收（内联切片 clone 解包） |
+
+修改前的核心问题：与上游同名的 `packed_broadcast_producer/consumer` 是上游循环的**语义对齐重写**而非复用——打包、slot 轮转、解包逻辑逐行重抄，上游修 bug 或改行为时两边会静默漂移（检视意见指出的主要维护成本来源）。这正是本 PR 要解决的。
+
+**PR 修改后**（HEAD `260e4c3c3`，344 行）：HCCL 循环整体委托上游，本地只保留 NPU 适配与增强。
 
 | 符号 | 类型 | 作用                                                                      |
 | --- | --- |-------------------------------------------------------------------------|
 | `packed_broadcast_producer(...)` | 函数 | HCCL 广播发送入口：包装 transport 与回调后委托上游                                       |
 | `packed_broadcast_consumer(...)` | 函数 | HCCL 广播接收入口：包装独立存储回调后委托上游                                               |
-| `packed_npu_ipc_producer(...)` | 函数 | NPU IPC 发送（本地实现）                                                        |
-| `packed_npu_ipc_consumer(...)` | 函数 | NPU IPC 接收（本地实现）                                                        |
+| `packed_npu_ipc_producer(...)` | 函数 | NPU IPC 发送（本地实现，复用 `_checked_callback`）                                                        |
+| `packed_npu_ipc_consumer(...)` | 函数 | NPU IPC 接收（本地实现，解包改调上游 `unpack_tensor`，复用 `_checked_callback` / `_reject_negative_shape`） |
 | `_hccl_group` / `_HCCLPackedGroup` | 私有 | NPU 传输适配：复用上游 `_get_streams`、broadcast 前后 flush + 同步、per-slot buffer 登记 |
 | `_owning_post_unpack` | 私有 | NPU 独立存储：unpack 得到 views 后逐项 clone                                    |
 | `_checked_callback` | 私有 | `post_iter_func` 返回值校验（dtype/numel 契约）                                  |
