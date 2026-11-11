@@ -1,6 +1,6 @@
 # Packed tensor 继承对照
 
-文档版本：**v1.0.14**。版本记录见 [CHANGELOG.md](CHANGELOG.md)；v1.0.8 及以前的流程详解、图表与真机验证记录见 [versions/](versions/README.md)。
+文档版本：**v1.0.15**。版本记录见 [CHANGELOG.md](CHANGELOG.md)；v1.0.8 及以前的流程详解、图表与真机验证记录见 [versions/](versions/README.md)。
 
 ## 1. 背景：可控范围内继承上游 vLLM 实现
 
@@ -132,29 +132,29 @@ flowchart TB
 
 | 环节 | vLLM | vllm-ascend | 差异性质 |
 | --- | --- | --- | --- |
-| 共享 buffer | `torch.empty(size, device="cuda")` | `torch.empty(size, device="npu")` | **硬差异**（device 字符串写死，wrapper 不覆盖） |
-| 句柄导出 | `reduce_tensor` → 消费端 `rebuild_cuda_tensor` 重建 | `reduce_tensor` 存 args，约定消费端用 `rebuild_npu_tensor` | **硬差异** |
+| 共享 buffer | `torch.empty(size, device="cuda")` | `torch.empty(size, device="npu")` | **硬差异**（device 字符串写死在函数体内，无法传参，见 4.7 残留 ①） |
+| 句柄导出 | `reduce_tensor` → 消费端 `rebuild_cuda_tensor` 重建 | `reduce_tensor` 存 args，约定消费端用 `rebuild_npu_tensor` | 适配（torch_npu 导入时自动 patch `reduce_tensor` 支持 NPU，见 4.7） |
 | 分包 / copy | contiguous → view(uint8) → copy_；超限 ValueError | 逐行相同 | 一致 |
 | 同步 | `torch.accelerator.current_stream().synchronize()` | `torch.npu.current_stream().synchronize()` | 适配 |
 | 回调 | `post_iter_func` 原样 | `_checked_callback` 校验 | 增强 |
 | chunk 协议 | yield `PackedIpcChunk` dataclass | yield dict（跨进程协议） | **硬差异**（换协议需两端同版本升级，零功能收益） |
 | 空 chunk | `if total_bytes:` 全零元素 chunk 不发送 | `if names:` 全零元素 chunk 仍发送元数据 | 语义差异 |
 
-**结论**：分包与 copy 核心一致，但 device 字符串与 yield 协议是硬差异 → ❌ 本地自写（语义对齐，共享 `_checked_callback`）。
+**结论**：分包与 copy 核心一致；句柄导出可解（torch_npu 自动 patch），yield 协议是选型而非 CUDA 障碍，唯一无法绕过的是 `device="cuda"` 字面量（L339，见 4.7 残留 ①）→ ❌ 本地自写（语义对齐，共享 `_checked_callback`）。
 
 ### 4.4 IPC consumer：`packed_ipc_consumer` ↔ `packed_npu_ipc_consumer`
 
 | 环节 | vLLM | vllm-ascend | 差异性质 |
 | --- | --- | --- | --- |
-| UUID 解析 | `torch.cuda.get_device_properties(i).uuid` | 调用方传入 `physical_npu_id`（`npu_generate_uuid` 生成，见 4.6） | **硬差异**（绑定 CUDA 属性查询；NPU 侧另有等价标识方案） |
-| 重建 | `rebuild_cuda_tensor`（CUDA C 级）+ `PackedBufferImporter` 缓存 | `rebuild_npu_tensor`（torch_npu，懒加载）+ device_index / 参数长度校验 | **硬差异** |
+| UUID 解析 | `torch.cuda.get_device_properties(i).uuid` | 调用方传入 `physical_npu_id`（`npu_generate_uuid` 生成，见 4.6） | **硬差异**（函数体内直接调用，见 4.7 残留 ②） |
+| 重建 | `rebuild_cuda_tensor`（CUDA C 级）+ `PackedBufferImporter` 缓存 | `rebuild_npu_tensor`（torch_npu，懒加载）+ device_index / 参数长度校验 | 可注入（importer 是公开参数，类继承覆写 `rebuild()` 即可，见 4.7 修正） |
 | 句柄查找 | UUID not in handle → ValueError | 相同 | 一致 |
 | 元数据校验 | `getattr(torch, dn)` 解析 dtype | 同 + isinstance(dtype) / 四表长度一致 / 负 shape / content_size 校验 | 增强 |
 | 截断 | `packed[:content_size]` | 相同 | 一致 |
 | 解包 + clone | `unpack_tensor` + 逐项 clone | 相同（直接调用上游 `unpack_tensor`） | 一致 |
 | refcount 防泄漏 | importer 保证一次 export 配一次释放 | 未引入；NPU 侧独立评估，不混入本 PR | 硬差异 |
 
-**结论**：解包与 clone 一致，但 UUID 解析和 rebuild 是 CUDA 专属 → ❌ 本地自写。
+**结论**：解包与 clone 一致；重建可经 importer 注入解决，真正无法绕过的只有 UUID 获取一处（L468-469，见 4.7）→ ❌ 本地自写（但继承可行性高于 producer，仅差一处）。
 
 ### 4.5 对照总览
 
@@ -167,12 +167,47 @@ flowchart TB
     end
     subgraph IPC["IPC 路径：CUDA 专属硬差异"]
         direction LR
-        IP["producer<br/>硬差异 3（device=cuda / dataclass 协议 / 句柄重建约定）<br/>一致 2 · 适配 1 · 增强 1"] -->|"❌ 本地自写"| IP2["packed_npu_ipc_producer"]
-        IC["consumer<br/>硬差异 3（get_device_properties / rebuild_cuda_tensor / importer）<br/>一致 3 · 增强 1"] -->|"❌ 本地自写"| IC2["packed_npu_ipc_consumer"]
+        IP["producer<br/>硬差异 1（device=cuda 字面量）<br/>可解 2（reduce_tensor / 协议）· 一致 2 · 增强 1"] -->|"❌ 本地自写（差 1 处）"| IP2["packed_npu_ipc_producer"]
+        IC["consumer<br/>硬差异 1（get_device_properties）<br/>可注入 2（importer 覆写 / device_index）· 一致 3 · 增强 1"] -->|"❌ 本地自写（差 1 处）"| IC2["packed_npu_ipc_consumer"]
     end
 ```
 
-**总结论**：继承与否由硬差异决定——HCCL 两个方法没有任何硬差异（device 由参数传入、通信接口同签名、事件链可复用），全部环节要么一致要么可本地包装，因此整体委托继承；IPC 两个方法每条都有 3 处 CUDA 专属硬差异（device 字符串、rebuild 函数、UUID 解析/协议类型），包装成本高于自写，因此本地实现、仅在解包/校验/分包等可共享环节复用上游。
+**总结论**：继承与否由硬差异决定——HCCL 两个方法没有任何无法解决的差异（device 由参数传入、通信接口同签名、事件链可复用），全部环节要么一致要么可本地包装，因此整体委托继承；IPC 两个方法各只剩 1 处函数体内的 CUDA 调用无法在 ascend 侧解决（producer 的 `device="cuda"` 字面量、consumer 的 `get_device_properties().uuid`），其余"硬差异"经逐项核查均可在 ascend 侧解决（wrapper 重绑、torch_npu 自动 patch、importer 类继承覆写），因此本地实现、仅在解包/校验/分包等可共享环节复用上游。完整穷举见 4.7。
+
+### 4.7 CUDA 操作穷举与最终继承边界
+
+对上游 `packed_tensor.py`（491 行，main 24420b7a）全部 CUDA 相关操作逐行穷举，按"ascend 侧能否解决"分三类。本节修正 4.3–4.5 的初步判定。
+
+**A 类：已解决**（wrapper / 等价 API / 真机验证）
+
+| 操作 | 位置 | 解法 |
+| --- | --- | --- |
+| `torch.cuda.Stream` / `torch.cuda.stream(...)` | L23-24、L180、L270 | `torch_cuda_wrapper` 重绑，真机 gate 验证 |
+| `torch.accelerator.current_device_index/current_stream` | L168、L223、L362、L383 | C 级实现直接解析 NPU，真机验证 |
+| `torch.Event()` / `record_stream` / `wait_event` / `.synchronize()` | L248-259、L176/193/269/296 | npu 等价 API，真机验证 |
+| `pack_tensors` 的 `device="cuda"` **默认参数** | L203 | 调用方显式传 npu 设备串（现有实现已如此；pack 本体是 CPU 内存操作） |
+
+**B 类：vllm-ascend 侧可解决，无需上游改动**
+
+| 操作 | 位置 | 解法 |
+| --- | --- | --- |
+| `reduce_tensor`（NPU tensor 支持） | L12、L340 | torch_npu 导入时自动 patch（经 `_share_npu_()`），npu_ipc_engine 已实证 |
+| `rebuild_cuda_tensor` + `PackedBufferImporter` 缓存 | L418-423、L482 | **修正 4.4 初判**：importer 是 consumer 的公开参数（默认 None 才 new 基类），可定义 `NPUBufferImporter(PackedBufferImporter)` 类继承覆写 `rebuild()` 调 `rebuild_npu_tensor`——缓存/refcount 对账逻辑是纯 Python，直接继承复用；handle 元组布局与 CUDA 一致，`list_args[6] = device_index`（上游 L480）原样可用 |
+| `PackedIpcChunk` dataclass 协议 | L300-310 | 非 CUDA 问题：dataclass 可直接构造/接收，ascend 选 dict 是跨进程协议选型，不是继承障碍 |
+
+**C 类：无法在 ascend 侧解决——全部残留仅此 2 处**
+
+| # | 操作 | 位置 | 为什么绕不过 | 上游最小改动 |
+| --- | --- | --- | --- | --- |
+| ① | `torch.empty(..., device="cuda")` 字面量 | producer L339 | 写死在函数体内无法传参；wrapper 不能重绑 `torch.empty`（污染所有代码路径，比 P1-2 的 hook 面更大）；NPU-only 环境 device="cuda" 直接 RuntimeError | 一行：`device: str = "cuda"` 参数化，调用方传 "npu" |
+| ② | `torch.cuda.get_device_properties(device_index).uuid` | consumer L468-469 | 函数体内直接调用；仓内替代先例走 Platform 扩展点但上游代码不走 Platform API；补绑扩大 wrapper 重绑面 | 两行：uuid 获取改为可注入参数（ascend 传 `npu_generate_uuid` 结果）或走 Platform API |
+
+**最终继承边界**（修正后）：
+
+- HCCL producer / consumer：A 类全覆盖 → ✅ 委托继承（现状）。
+- IPC producer：仅差残留 ① → ① 合入后即可删 `packed_npu_ipc_producer` 改直调上游（`reduce_tensor`、`PackedIpcChunk`、分包/copy 全部直接用）。
+- IPC consumer：仅差残留 ② → ② 合入后定义 `NPUBufferImporter(PackedBufferImporter)` 覆写 `rebuild()`，删自写 consumer 改直调上游 + 注入 uuid。
+- 两个上游改动合计约 3 行，均为纯参数化、对 CUDA 路径零行为影响，适合作为后续小 PR 提给上游；合入前维持现状（自写 IPC）不变。
 
 ### 4.6 IPC cuda 绑定的可解性与继承路径
 

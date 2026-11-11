@@ -1,5 +1,12 @@
 # Packed tensor 文档版本记录
 
+## v1.0.15
+
+- 新增 4.7 节“CUDA 操作穷举与最终继承边界”：对上游 packed_tensor.py 全部 CUDA 相关操作逐行穷举，分三类——A 类已解决（wrapper/等价 API/真机验证）、B 类 ascend 侧可解决（torch_npu 自动 patch reduce_tensor；**修正**：rebuild_cuda_tensor 经 importer 类继承覆写可解，PackedIpcChunk 非 CUDA 障碍）、C 类无法解决仅 2 处（producer L339 device="cuda" 字面量、consumer L468 get_device_properties().uuid）。
+- 同步修正 4.3/4.4/4.5：producer 硬差异 3→1（句柄导出改判适配、协议改判选型）、consumer 硬差异 3→1（重建改判可注入）、总览图与总结论同步更新。
+- 结论：两个残留合计约 3 行上游参数化改动（device 参数化 + uuid 注入），合入后 IPC 两方法可改为直调继承（consumer 需 NPUBufferImporter 覆写 rebuild）；合入前维持自写不变。
+- 保留 v1.0.14 快照。
+
 ## v1.0.14
 
 - 4.6 节补充 `torch.cuda.get_device_properties` 的仓内替换先例核查：全仓 git 历史（`-S`）从未有人写过或重绑过该调用；替代先例走 vLLM Platform 扩展点（`NPUPlatform.get_device_uuid` 调 `torch.npu.get_device_properties().uuid`、`num_compute_units` 映射 cube_core_num）。
