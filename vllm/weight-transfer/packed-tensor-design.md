@@ -133,33 +133,32 @@ flowchart TB
 | slot 完成 | `slot_done` event + 下轮 synchronize（避开 ROCm 共享队列） | 相同 | 一致 |
 | 结尾清理 | 无条件 drain | 仅异常路径本地 drain | 适配 |
 
-**结论**：除独立存储包装与 device 参数外全部一致 → ✅ 委托继承。读序缺口在真实 HCCL 时序下未复现（v1.0.8 快照 5.4）。
 
 ### 4.3 IPC producer：`packed_ipc_producer` ↔ `packed_npu_ipc_producer`
 
-| 环节 | vLLM | vllm-ascend | 差异性质 |
-| --- | --- | --- | --- |
-| 共享 buffer | `torch.empty(size, device="cuda")` | `torch.empty(size, device="npu")` | **差异**（device 字符串写死在函数体内，无法传参，见 4.7 残留 ①） |
-| 句柄导出 | `reduce_tensor` → 消费端 `rebuild_cuda_tensor` 重建 | `reduce_tensor` 存 args，约定消费端用 `rebuild_npu_tensor` | 适配（torch_npu 导入时自动 patch `reduce_tensor` 支持 NPU，见 4.7） |
-| 分包 / copy | contiguous → view(uint8) → copy_；超限 ValueError | 逐行相同 | 一致 |
-| 同步 | `torch.accelerator.current_stream().synchronize()` | `torch.npu.current_stream().synchronize()` | 适配 |
-| 回调 | `post_iter_func` 原样 | `_checked_callback` 校验 | 增强 |
-| chunk 协议 | yield `PackedIpcChunk` dataclass | yield dict（跨进程协议） | **差异**（换协议需两端同版本升级，零功能收益） |
-| 空 chunk | `if total_bytes:` 全零元素 chunk 不发送 | `if names:` 全零元素 chunk 仍发送元数据 | 语义差异 |
+| 环节 | vLLM | vllm-ascend | 差异性质                                                    |
+| --- | --- | --- |---------------------------------------------------------|
+| 共享 buffer | `torch.empty(size, device="cuda")` | `torch.empty(size, device="npu")` | **差异**（device 字符串写死在函数体内，无法传参）                          |
+| 句柄导出 | `reduce_tensor` → 消费端 `rebuild_cuda_tensor` 重建 | `reduce_tensor` 存 args，约定消费端用 `rebuild_npu_tensor` | 适配（torch_npu 导入时自动 patch `reduce_tensor` 支持 NPU，[需要验证]） |
+| 分包 / copy | contiguous → view(uint8) → copy_；超限 ValueError | 逐行相同 | 一致                                                      |
+| 同步 | `torch.accelerator.current_stream().synchronize()` | `torch.npu.current_stream().synchronize()` | 适配                                                      |
+| 回调 | `post_iter_func` 原样 | `_checked_callback` 校验 | 增强                                                      |
+| chunk 协议 | yield `PackedIpcChunk` dataclass | yield dict（跨进程协议） | **差异**（换协议需两端同版本升级，零功能收益）                               |
+| 空 chunk | `if total_bytes:` 全零元素 chunk 不发送 | `if names:` 全零元素 chunk 仍发送元数据 | 语义差异                                                    |
 
-**结论**：分包与 copy 核心一致；句柄导出可解（torch_npu 自动 patch），yield 协议是选型而非 CUDA 障碍，唯一无法绕过的是 `device="cuda"` 字面量（L339，见 4.7 残留 ①）→ ❌ 本地自写（语义对齐，共享 `_checked_callback`）。
+**结论**：分包与 copy 核心一致；句柄导出可解（torch_npu 自动 patch），yield 协议是选型而非 CUDA 障碍，唯一无法绕过的是 `device="cuda"` 字面量（L339）→ ❌ 本地自写（语义对齐，共享 `_checked_callback`）。
 
 ### 4.4 IPC consumer：`packed_ipc_consumer` ↔ `packed_npu_ipc_consumer`
 
 | 环节 | vLLM | vllm-ascend                                                     | 差异性质                                              |
 | --- | --- |-----------------------------------------------------------------|---------------------------------------------------|
-| UUID 解析 | `torch.cuda.get_device_properties(i).uuid` | 调用方传入 `physical_npu_id`（`npu_generate_uuid` 生成，见 4.6）           | **差异**                                            |
+| UUID 解析 | `torch.cuda.get_device_properties(i).uuid` | 调用方传入 `physical_npu_id`（`npu_generate_uuid` 生成）           | **差异**                                            |
 | 重建 | `rebuild_cuda_tensor`+ `PackedBufferImporter` 缓存 | `rebuild_npu_tensor`（torch_npu，懒加载）+ device_index / 参数长度校验      | 可注入（类继承覆写 `rebuild()` 即可） |
 | 句柄查找 | UUID not in handle → ValueError | 相同                                                              | 一致                                                |
 | 元数据校验 | `getattr(torch, dn)` 解析 dtype | 在此基础上增加了 isinstance(dtype) / 四表长度一致 / 负 shape / content_size 校验 | 增强                                                |
 | 截断 | `packed[:content_size]` | 相同                                                              | 一致                                                |
 | 解包 + clone | `unpack_tensor` + 逐项 clone | 相同（直接调用上游 `unpack_tensor`）                                      | 一致                                                |
-| refcount 防泄漏 | importer 保证一次 export 配一次释放 | 未引入；NPU 侧独立评估，不混入本 PR                                           | 差异                                                |
+| refcount 防泄漏 | importer 保证一次 export 配一次释放 | 未引入，待合入PR #20740                                                | 差异                                                |
 
 **结论**：无法绕过的有 UUID 解析一处
 
