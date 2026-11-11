@@ -34,7 +34,7 @@
 | `packed_npu_ipc_producer(...)` | 函数 | 本地 NPU IPC 发送（内联回调校验，逻辑与上游 IPC producer 语义对齐但逐行自写） |
 | `packed_npu_ipc_consumer(...)` | 函数 | 本地 NPU IPC 接收（内联切片 clone 解包） |
 
-修改前的核心问题：与上游同名的 `packed_broadcast_producer/consumer` 是上游循环的**语义对齐重写**而非复用——打包、slot 轮转、解包逻辑逐行重抄，上游修 bug 或改行为时两边会静默漂移（检视意见指出的主要维护成本来源）。这正是本 PR 要解决的。
+修改前的核心问题：与上游同名的 `packed_broadcast_producer/consumer` 是上游循环的**语义对齐重写**而非复用
 
 **PR 修改后**：HCCL循环整体委托上游，本地保留 NPU 适配与增强。
 
