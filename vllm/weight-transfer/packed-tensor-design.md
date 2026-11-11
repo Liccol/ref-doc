@@ -38,20 +38,18 @@
 
 ## 3. 逐方法继承判定
 
-| 上游方法 | Ascend 是否继承 | 继承方式 / 不继承原因                                                                                                                                                                                                                                                                                                                                                  |
-| --- | --- |---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `_get_streams` | ✅ 完全继承 | `_hccl_group` 内复用；缓存键统一为 `torch.accelerator.current_device_index()`                                                                                                                                                                                                                                                                                           |
-| `unpack_tensor` | ✅ 完全继承 | HCCL 循环内由上游调用；NPU IPC consumer 也直接调用                                                                                                                                                                                                                                                                                                                          |
-| `PackedChunk` | ✅ 间接继承 | 上游 HCCL 循环内部使用，随循环一并继承                                                                                                                                                                                                                                                                                                                                        |
-| `pack_tensors` | ✅ 间接继承 | 上游 producer 内部调用，随循环一并继承                                                                                                                                                                                                                                                                                                                                      |
-| `packed_nccl_broadcast_producer` | ✅ 委托继承 | Ascend 入口做三件事：`_hccl_group` 提供 NPU transport、`_checked_callback` 校验回调、异常路径本地 drain；主循环整体委托                                                                                                                                                                                                                                                                    |
-| `packed_nccl_broadcast_consumer` | ✅ 委托继承 | Ascend 入口做四件事：metadata 负 shape 校验、`_owning_post_unpack` 独立存储（上游返回 views，而本侧需要独立存储契约）、`device=f"npu:{...}"` 参数、委托上游。无跨 chunk event 修复；读序缺口在真实 HCCL 时序下未复现（详见 v1.0.8 快照 5.4）                                                                                                                                                                                    |
-| `packed_ipc_producer` | ❌ 不继承，自写 `packed_npu_ipc_producer` | 硬障碍无法绕过：① `torch.empty(device="cuda")` 硬编码 CUDA 设备字符串，NPU 上直接失败（torch_cuda_wrapper 不改 device 字符串）；② 上游 yield `PackedIpcChunk`，NPU 协议是 dict，需协议转换；③ 上游 `if total_bytes:` 对全零元素 chunk 不发送，NPU 语义要求全零 chunk 也发送元数据。曾做过整循环委托实验（约 312 行，需 empty 重定向 + reduce 转发 + 全空前缀特殊路径 + 协议转换），复杂度超过自写，已撤回。共享的部分：`_checked_callback`、`unpack_tensor`、buffer 复用与 copy 逻辑与上游逐行对齐 |
-| `packed_ipc_consumer` | ❌ 不继承，自写 `packed_npu_ipc_consumer` | 硬障碍：① `torch.cuda.get_device_properties(device_index).uuid` 无 NPU 等价 API（物理 NPU UUID 由调用方传入）；② `rebuild_cuda_tensor` 不可用，改用 torch_npu 的 `rebuild_npu_tensor`（含 device_index 覆写与参数校验）。其余逻辑（`content_size` 截断、`unpack_tensor` + clone）与上游一致，其中 `packed[:content_size]` 防御已加                                                                                     |
-| `PackedBufferImporter` | ❌ 不继承 | 硬依赖 `rebuild_cuda_tensor`；不混入本 PR                                                                                                                                                                                                                                                                                                                             |
-| `PackedIpcChunk` | ❌ 不继承 | 现有 NPU 调用方跨进程传 dict；dataclass 需两端同版本且给上游类型引入运行时依赖，纯重构无功能收益                                                                                                                                                                                                                                                                                                    |
-
-**汇总**：上游 11 个符号中，6 个完全/间接继承，2 个委托继承（含 NPU 适配包装），3 个 IPC 相关因 CUDA 专属调用或协议差异无法直接继承，由 2 个自写函数 + dict 协议替代，其中可共享的解包与校验逻辑已复用上游。
+| 上游方法 | Ascend 是否继承 | 继承方式 / 不继承原因                                                                                                                                                                                                                                                                                                                                            |
+| --- | --- |---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `_get_streams` | ✅ 完全继承 | `_hccl_group` 内复用；缓存键统一为 `torch.accelerator.current_device_index()`                                                                                                                                                                                                                                                                                     |
+| `unpack_tensor` | ✅ 完全继承 | HCCL 循环内由上游调用；NPU IPC consumer 也直接调用                                                                                                                                                                                                                                                                                                                    |
+| `PackedChunk` | ✅ 间接继承 | 上游 HCCL 循环内部使用，随循环一并继承                                                                                                                                                                                                                                                                                                                                  |
+| `pack_tensors` | ✅ 间接继承 | 上游 producer 内部调用，随循环一并继承                                                                                                                                                                                                                                                                                                                                |
+| `packed_nccl_broadcast_producer` | ✅ 委托继承 | Ascend 入口做三件事：`_hccl_group` 提供 NPU transport、`_checked_callback` 校验回调、异常路径本地 drain；主循环整体委托                                                                                                                                                                                                                                                              |
+| `packed_nccl_broadcast_consumer` | ✅ 委托继承 | Ascend 入口做四件事：metadata 负 shape 校验、`_owning_post_unpack` 独立存储（上游返回 views，而本侧需要独立存储契约）、`device=f"npu:{...}"` 参数、委托上游。无跨 chunk event 修复；读序缺口在真实 HCCL 时序下未复现（详见 v1.0.8 快照 5.4）                                                                                                                                                                              |
+| `packed_ipc_producer` | ❌ 不继承，自写 `packed_npu_ipc_producer` | 硬障碍：① `torch.empty(device="cuda")` 硬编码 CUDA 设备字符串，NPU 上直接失败（torch_cuda_wrapper 不改 device 字符串）；② 上游 yield `PackedIpcChunk`，NPU 格式为 dict，不一致；③ 上游 `if total_bytes:` 对全零元素 chunk 不发送，NPU 语义要求全零 chunk 也发送元数据。 |
+| `packed_ipc_consumer` | ❌ 不继承，自写 `packed_npu_ipc_consumer` | 硬障碍：① `torch.cuda.get_device_properties(device_index).uuid` ；② `rebuild_cuda_tensor` 不可用，改用 torch_npu 的 `rebuild_npu_tensor`。其余逻辑（`content_size` 截断、`unpack_tensor` + clone）与上游一致                                                                                                                                                                       |
+| `PackedBufferImporter` | ❌ 不继承 | 硬依赖 `rebuild_cuda_tensor`；不混入本 PR                                                                                                                                                                                                                                                                                                                       |
+| `PackedIpcChunk` | ❌ 不继承 | 现有 NPU 调用方跨进程传 dict；需给上游类型引入运行时依赖，纯重构无功能收益                                                                                                                                                                                                                                                                                              |
 
 ### 3.1 继承关系图
 
@@ -133,56 +131,45 @@ flowchart TB
 
 ### 4.4 IPC consumer：`packed_ipc_consumer` ↔ `packed_npu_ipc_consumer`
 
-| 环节 | vLLM | vllm-ascend | 差异性质 |
-| --- | --- | --- | --- |
-| UUID 解析 | `torch.cuda.get_device_properties(i).uuid` | 调用方传入 `physical_npu_id`（`npu_generate_uuid` 生成，见 4.6） | **差异**（函数体内直接调用，见 4.7 残留 ②） |
-| 重建 | `rebuild_cuda_tensor`（CUDA C 级）+ `PackedBufferImporter` 缓存 | `rebuild_npu_tensor`（torch_npu，懒加载）+ device_index / 参数长度校验 | 可注入（importer 是公开参数，类继承覆写 `rebuild()` 即可，见 4.7 修正） |
-| 句柄查找 | UUID not in handle → ValueError | 相同 | 一致 |
-| 元数据校验 | `getattr(torch, dn)` 解析 dtype | 同 + isinstance(dtype) / 四表长度一致 / 负 shape / content_size 校验 | 增强 |
-| 截断 | `packed[:content_size]` | 相同 | 一致 |
-| 解包 + clone | `unpack_tensor` + 逐项 clone | 相同（直接调用上游 `unpack_tensor`） | 一致 |
-| refcount 防泄漏 | importer 保证一次 export 配一次释放 | 未引入；NPU 侧独立评估，不混入本 PR | 差异 |
+| 环节 | vLLM | vllm-ascend                                                     | 差异性质                                              |
+| --- | --- |-----------------------------------------------------------------|---------------------------------------------------|
+| UUID 解析 | `torch.cuda.get_device_properties(i).uuid` | 调用方传入 `physical_npu_id`（`npu_generate_uuid` 生成，见 4.6）           | **差异**                                            |
+| 重建 | `rebuild_cuda_tensor`+ `PackedBufferImporter` 缓存 | `rebuild_npu_tensor`（torch_npu，懒加载）+ device_index / 参数长度校验      | 可注入（类继承覆写 `rebuild()` 即可） |
+| 句柄查找 | UUID not in handle → ValueError | 相同                                                              | 一致                                                |
+| 元数据校验 | `getattr(torch, dn)` 解析 dtype | 在此基础上增加了 isinstance(dtype) / 四表长度一致 / 负 shape / content_size 校验 | 增强                                                |
+| 截断 | `packed[:content_size]` | 相同                                                              | 一致                                                |
+| 解包 + clone | `unpack_tensor` + 逐项 clone | 相同（直接调用上游 `unpack_tensor`）                                      | 一致                                                |
+| refcount 防泄漏 | importer 保证一次 export 配一次释放 | 未引入；NPU 侧独立评估，不混入本 PR                                           | 差异                                                |
 
-**结论**：解包与 clone 一致；重建可经 importer 注入解决，真正无法绕过的只有 UUID 获取一处（L468-469，见 4.7）→ ❌ 本地自写（但继承可行性高于 producer，仅差一处）。
+**结论**：无法绕过的有 UUID 解析一处
 
-### 4.6 IPC 设备绑定代码的解耦继承分析
-
-IPC 的“差异”并非全部不可解——仓库 engine 层已有成熟先例，逐项核对如下。
+### 4.5 IPC 设备绑定代码的解耦继承分析
 
 **仓内已有的同类解法**（`npu_ipc_engine.py`）：`NPUIPCWeightTransferEngine` / `NPUIPCTrainerWeightTransferEngine` 直接继承上游 `IPCWeightTransferEngine` / `IPCTrainerWeightTransferEngine`，只覆写 CUDA 专属部分。三类 cuda 绑定的对应解法：
 
 | 上游 cuda 绑定 | vllm-ascend 解法 | 位置 |
 | --- | --- | --- |
 | `torch.cuda.get_device_properties().uuid` 作 IPC key | `npu_generate_uuid()` = `{host_ip}-{物理chip_id}`，经 `ASCEND_RT_VISIBLE_DEVICES` 做逻辑→物理映射，替代硬件 UUID（`torch.npu.get_device_properties` 存在且 props 可能带 uuid，platform.py 在用，但选型未依赖它） | npu_ipc_engine.py `npu_generate_uuid` |
-| `rebuild_cuda_tensor`（CUDA C 级） | `torch_npu.multiprocessing.reductions.rebuild_npu_tensor`（懒加载）+ 重建时覆写 device_index（handle 元组下标 6，收发双方逻辑卡号可能不同） | npu_ipc_engine.py `receive_weights` |
+| `rebuild_cuda_tensor` | `torch_npu.multiprocessing.reductions.rebuild_npu_tensor`（懒加载）+ 重建时覆写 device_index | npu_ipc_engine.py `receive_weights` |
 | `reduce_tensor` 对 NPU 的支持 | torch_npu 导入时自动 patch `torch.multiprocessing.reductions.reduce_tensor`（经 `_share_npu_()`），producer 侧无需改 | npu_ipc_engine.py docstring |
 | `torch.cuda.Stream/stream` 等 API | `torch_cuda_wrapper` 进程级重绑（14 个 API） | worker/v2/utils.py |
 
-**为什么函数级直调上游仍差三个口子**：
+**函数调用缺口**：
 
-1. producer 的 `device="cuda"` 是函数内字面量默认值（上游 L339），ascend 无法传参绕过，需上游一行参数化；
+1. producer 的 `ipc_buffer = torch.empty(buffer_size_bytes, dtype=torch.uint8, device="cuda")` ascend 无法传参绕过，需上游优化传参；
 2. consumer 的 `rebuild_cuda_tensor` 按名导入（上游 L418），wrapper 只重绑 `torch.cuda.*` 命名空间、兜不住 reductions 模块；替换它只能做进程级 monkey patch——即 P1-2 已删除的污染模式，不能走回头路；
 3. wrapper 未重绑 `torch.cuda.get_device_properties`——全仓 git 历史（`-S` 检索）从未有人写过或重绑过该调用，仓内替代先例走的是 vLLM Platform 扩展点：`NPUPlatform.get_device_uuid()` 直接调 `torch.npu.get_device_properties(device_id).uuid`（无 uuid 即 RuntimeError），`num_compute_units()` 把 CUDA 的 `multi_processor_count` 概念映射为 `cube_core_num`（带两级 fallback）。
 
-**注入时的选型注意**：weight_transfer 引擎未用 platform 的 `get_device_uuid`，而是自建 `npu_generate_uuid`（host_ip + 物理 chip 号）——结合 platform 里"无 uuid 就 RuntimeError"的防御写法，说明 props.uuid 在部分 torch_npu/CANN 版本上不可靠。因此将来上游若把 uuid 查找改为可注入，ascend 侧应注入 `npu_generate_uuid` 而非 `get_device_uuid`（跨版本稳定、同 chip 进程必一致）；若上游走 Platform API 路线，则现有覆写零适配直接可用。
-
-**继承路径建议**：
-
-- 本 PR：维持自写 IPC。解法已落在 engine 层（`packed_npu_ipc_consumer` 内部用 `rebuild_npu_tensor` + `npu_uuid` + device_index 覆写，与 engine 同构）；函数级直调的口子中两个要动上游。
-- 中期：向上游提 2 个极小 PR——① producer 的 `device` 参数化；② consumer 的 rebuild 函数与 UUID 查找改为可注入。合入后 ascend 可删自写 producer/consumer，改直调上游 + `npu_generate_uuid`，与 HCCL 路径的委托继承形态对齐。
-
 ## 5. packed 相关未合入 PR 的影响分析
 
-继承重构（#20676）完成后，仓库中其余 packed weight transfer 未合入 PR 是否还需要改（截至 2026-11-11 检索，简要）：
+继承重构（#20676）完成后，仓库中其余 packed weight transfer 未合入 PR 是否还需要改：
 
-| PR | 内容 | 继承完成后是否还需要 |
-| --- | --- | --- |
-| #20740 IPC 一次性导入 | NPU IPC 每次重建/释放导致 producer refcount 负数泄漏；引入一次性导入缓存 | **仍需要，不受影响**。与第 4.4 节“importer 不继承、NPU 侧独立修复”的决策吻合，可视为 `PackedBufferImporter` 思想的 NPU 落地；与 #20676 仅需 rebase 协调（同文件不同区域） |
-| #18078 拆分工具与后端 | 把 packed_tensor 序列化/反序列化从 HCCL、NPU IPC 后端拆出（+728/-256，恰好覆盖 #20676 的两个文件） | **需要重大返工**。其拆分对象在继承后结构已变（循环委托上游、IPC 收敛为两个入口函数），与本 PR 直接冲突；需在 #20676 合入后基于新结构重评甚至重写 |
-| #16999 HCCL buffer stream 生命周期 | 旧本地 producer 循环的四项修复：按设备缓存 stream、同 slot stream 打包+广播、在途 buffer 保活、结尾 drain | **被继承取代，可关闭**。上游循环本身就包含这四项（见 4.1）；release 分支同类问题由 #18763 / #20614 覆盖 |
-| #19127 跨 chunk readiness | 基于 hook / 本地循环的跨 chunk event + clone record_stream 方案（+286/-33） | **被继承取代**。hook 已删除、真机最小用例未复现读序缺口（v1.0.8 快照 5.4）；可关闭，或改写为 `_owning_post_unpack` 内几行 wait_event 的可选加固后重提 |
-| #12713 打包前源 stream 同步 | producer 打包读源 tensor 时源可能在 caller stream 在途，仅同步 slot stream 不够（+4/-0） | **仍需要，但补丁位置要改**。缺口在委托后的上游循环中同样存在，4 行修复应改挂到本地入口（`_hccl_group` 进入循环前同步 caller stream），不能继续打在旧本地循环上 |
-| #18763 单 stream 加载（v0.30.0） | release 分支：跨 chunk 加载顺序修复 | 不受影响。release 分支保留本地循环，独立于 main 重构 |
+| PR                                 | 内容 | 继承完成后是否还需要 |
+|------------------------------------| --- | --- |
+| #20740 IPC 一次性导入                   | NPU IPC 每次重建/释放导致 producer refcount 负数泄漏；引入一次性导入缓存 | **仍需要，不受影响**。与第 4.4 节“importer 不继承、NPU 侧独立修复”的决策吻合，可视为 `PackedBufferImporter` 思想的 NPU 落地；与 #20676 仅需 rebase 协调（同文件不同区域） |
+| #19127 跨 chunk 乱序                  | 基于 hook / 本地循环的跨 chunk event + clone record_stream 方案（+286/-33） | **被继承取代**。hook 已删除、真机最小用例未复现读序缺口（v1.0.8 快照 5.4）；可关闭，或改写为 `_owning_post_unpack` 内几行 wait_event 的可选加固后重提 |
+| #12713 打包前源 stream 同步              | producer 打包读源 tensor 时源可能在 caller stream 在途，仅同步 slot stream 不够（+4/-0） | **仍需要，但补丁位置要改**。缺口在委托后的上游循环中同样存在，4 行修复应改挂到本地入口（`_hccl_group` 进入循环前同步 caller stream），不能继续打在旧本地循环上 |
+| #18763 单 stream 加载（v0.30.0）        | release 分支：跨 chunk 加载顺序修复 | 不受影响。release 分支保留本地循环，独立于 main 重构 |
 | #20614 packed 修复 backport（v0.30.0） | release 分支 backport #19164 | 不受影响。同上 |
 
-**合入顺序建议**：先合 #20676（继承基座）→ #12713 按新入口改 4 行重提、#20740 rebase → #18078 基于新结构重评 → 关闭 #16999、#19127（或按可选加固改写）。
+**合入顺序建议**：先合 #20676（继承基座）→ #12713 按新入口重提、#20740 rebase → 关闭 #19127（或按可选加固改写）
