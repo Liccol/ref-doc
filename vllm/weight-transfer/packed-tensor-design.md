@@ -1,6 +1,6 @@
 # Packed tensor 继承对照
 
-文档版本：**v1.0.12**。版本记录见 [CHANGELOG.md](CHANGELOG.md)；v1.0.8 及以前的流程详解、图表与真机验证记录见 [versions/](versions/README.md)。
+文档版本：**v1.0.13**。版本记录见 [CHANGELOG.md](CHANGELOG.md)；v1.0.8 及以前的流程详解、图表与真机验证记录见 [versions/](versions/README.md)。
 
 ## 1. 背景：可控范围内继承上游 vLLM 实现
 
@@ -146,7 +146,7 @@ flowchart TB
 
 | 环节 | vLLM | vllm-ascend | 差异性质 |
 | --- | --- | --- | --- |
-| UUID 解析 | `torch.cuda.get_device_properties(i).uuid` | 调用方传入 `physical_npu_id` | **硬差异**（NPU 无等价 API） |
+| UUID 解析 | `torch.cuda.get_device_properties(i).uuid` | 调用方传入 `physical_npu_id`（`npu_generate_uuid` 生成，见 4.6） | **硬差异**（绑定 CUDA 属性查询；NPU 侧另有等价标识方案） |
 | 重建 | `rebuild_cuda_tensor`（CUDA C 级）+ `PackedBufferImporter` 缓存 | `rebuild_npu_tensor`（torch_npu，懒加载）+ device_index / 参数长度校验 | **硬差异** |
 | 句柄查找 | UUID not in handle → ValueError | 相同 | 一致 |
 | 元数据校验 | `getattr(torch, dn)` 解析 dtype | 同 + isinstance(dtype) / 四表长度一致 / 负 shape / content_size 校验 | 增强 |
@@ -173,6 +173,30 @@ flowchart TB
 ```
 
 **总结论**：继承与否由硬差异决定——HCCL 两个方法没有任何硬差异（device 由参数传入、通信接口同签名、事件链可复用），全部环节要么一致要么可本地包装，因此整体委托继承；IPC 两个方法每条都有 3 处 CUDA 专属硬差异（device 字符串、rebuild 函数、UUID 解析/协议类型），包装成本高于自写，因此本地实现、仅在解包/校验/分包等可共享环节复用上游。
+
+### 4.6 IPC cuda 绑定的可解性与继承路径
+
+IPC 的“硬差异”并非全部不可解——仓库 engine 层已有成熟先例，逐项核对如下。
+
+**仓内已有的同类解法**（`npu_ipc_engine.py`）：`NPUIPCWeightTransferEngine` / `NPUIPCTrainerWeightTransferEngine` 直接继承上游 `IPCWeightTransferEngine` / `IPCTrainerWeightTransferEngine`，只覆写 CUDA 专属部分。三类 cuda 绑定的对应解法：
+
+| 上游 cuda 绑定 | vllm-ascend 解法 | 位置 |
+| --- | --- | --- |
+| `torch.cuda.get_device_properties().uuid` 作 IPC key | `npu_generate_uuid()` = `{host_ip}-{物理chip_id}`，经 `ASCEND_RT_VISIBLE_DEVICES` 做逻辑→物理映射，替代硬件 UUID（`torch.npu.get_device_properties` 存在且 props 可能带 uuid，platform.py 在用，但选型未依赖它） | npu_ipc_engine.py `npu_generate_uuid` |
+| `rebuild_cuda_tensor`（CUDA C 级） | `torch_npu.multiprocessing.reductions.rebuild_npu_tensor`（懒加载）+ 重建时覆写 device_index（handle 元组下标 6，收发双方逻辑卡号可能不同） | npu_ipc_engine.py `receive_weights` |
+| `reduce_tensor` 对 NPU 的支持 | torch_npu 导入时自动 patch `torch.multiprocessing.reductions.reduce_tensor`（经 `_share_npu_()`），producer 侧无需改 | npu_ipc_engine.py docstring |
+| `torch.cuda.Stream/stream` 等 API | `torch_cuda_wrapper` 进程级重绑（14 个 API） | worker/v2/utils.py |
+
+**为什么函数级直调上游仍差三个口子**：
+
+1. producer 的 `device="cuda"` 是函数内字面量默认值（上游 L339），ascend 无法传参绕过，需上游一行参数化；
+2. consumer 的 `rebuild_cuda_tensor` 按名导入（上游 L418），wrapper 只重绑 `torch.cuda.*` 命名空间、兜不住 reductions 模块；替换它只能做进程级 monkey patch——即 P1-2 已删除的污染模式，不能走回头路；
+3. wrapper 未重绑 `torch.cuda.get_device_properties`，补绑会扩大重绑面。
+
+**继承路径建议**：
+
+- 本 PR：维持自写 IPC。解法已落在 engine 层（`packed_npu_ipc_consumer` 内部用 `rebuild_npu_tensor` + `npu_uuid` + device_index 覆写，与 engine 同构）；函数级直调的口子中两个要动上游。
+- 中期：向上游提 2 个极小 PR——① producer 的 `device` 参数化；② consumer 的 rebuild 函数与 UUID 查找改为可注入。合入后 ascend 可删自写 producer/consumer，改直调上游 + `npu_generate_uuid`，与 HCCL 路径的委托继承形态对齐。
 
 ## 5. packed 相关未合入 PR 的影响分析
 

@@ -1,5 +1,13 @@
 # Packed tensor 文档版本记录
 
+## v1.0.13
+
+- 新增 4.6 节“IPC cuda 绑定的可解性与继承路径”：核对仓内 `npu_ipc_engine.py` 已有的同类解法（`npu_generate_uuid` 替代 CUDA UUID、`rebuild_npu_tensor` + device_index 覆写替代 `rebuild_cuda_tensor`、torch_npu 自动 patch `reduce_tensor`、`torch_cuda_wrapper` 重绑 `torch.cuda.*`）。
+- 说明函数级直调上游 IPC 仍差的三个口子：producer `device="cuda"` 字面量、consumer 按名导入的 `rebuild_cuda_tensor`（monkey patch 不可回头）、wrapper 未重绑 `get_device_properties`。
+- 继承路径建议：本 PR 维持自写 IPC（解法已同构落在 engine 层）；中期向上游提 2 个极小 PR（device 参数化、rebuild/UUID 可注入），合入后与 HCCL 路径同样改为委托继承。
+- 修正 4.4 节 UUID 行表述：`torch.npu.get_device_properties` 存在（platform.py 在用），选型 `npu_generate_uuid` 是设计决策而非能力缺失。
+- 保留 v1.0.12 快照。
+
 ## v1.0.12
 
 - 新增第 5 章“packed 相关未合入 PR 的影响分析”：检索 vllm-ascend 全部 7 个 packed weight transfer 未合入 PR（#20740/#18078/#16999/#19127/#12713/#18763/#20614），逐个判定继承重构完成后是否还需要修改。
