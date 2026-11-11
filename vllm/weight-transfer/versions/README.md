@@ -19,5 +19,6 @@
 - [v1.0.14](packed-tensor-design-v1.0.14.md)
 - [v1.0.15](packed-tensor-design-v1.0.15.md)
 - [v1.0.16](packed-tensor-design-v1.0.16.md)
+- [v1.0.17](packed-tensor-design-v1.0.17.md)
 
 [当前版本](../packed-tensor-design.md) · [版本记录](../CHANGELOG.md)

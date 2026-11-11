@@ -70,6 +70,9 @@
 
 ```mermaid
 flowchart TB
+    subgraph PRE["修改前（merge-base 37854b83，449 行）"]
+        OLD["同名函数为上游循环的语义对齐重写<br/>零上游调用：打包/轮转/解包逐行自抄"]
+    end
     subgraph ASC["vllm-ascend packed_tensor.py（344 行，260e4c3c3）"]
         AP["+ packed_broadcast_producer()"]
         AC["+ packed_broadcast_consumer()"]
@@ -84,12 +87,15 @@ flowchart TB
         UP3["unpack_tensor()"]
         UP4["_get_streams() @cache"]
         UP5["pack_tensors() / PackedChunk / DEFAULT_* 常量"]
-        subgraph NI["未继承（CUDA 专属 / 协议差异）"]
-            N1["packed_ipc_producer() / packed_ipc_consumer()<br/>PackedBufferImporter / PackedIpcChunk"]
+        subgraph NI["未继承（自写替代，硬缺口见 4.5）"]
+            N1["packed_ipc_producer：差 device=cuda 传参"]
+            N2["packed_ipc_consumer / PackedBufferImporter：差 rebuild_cuda_tensor、get_device_properties().uuid"]
+            N3["PackedIpcChunk：跨进程 dict 协议选型"]
         end
     end
     TW["torch_cuda_wrapper()（worker/v2/utils.py）<br/>进程级 cuda→npu，不恢复"]
 
+    PRE -. "本 PR：删除重写，改为委托继承" .-> ASC
     AP -- "① 委托主循环" --> UP1
     AC -- "② 委托主循环 + _owning_post_unpack 独立存储" --> UP2
     AI2 -- "③ 复用解包" --> UP3

@@ -1,5 +1,11 @@
 # Packed tensor 文档版本记录
 
+## v1.0.17
+
+- 3.1 继承关系图刷新：新增“修改前（merge-base 37854b83，449 行）”来源节点（对应 2.2 的修改前对照）；“未继承”黑盒拆分为三个具体节点——producer 差 `device=cuda` 传参、consumer/PackedBufferImporter 差 `rebuild_cuda_tensor` 与 uuid 获取、`PackedIpcChunk` 协议选型，与第 3 章表格及 4.5 函数调用缺口对齐。
+- 注：v1.0.15→v1.0.16 之间包含三次“refresh”提交（作者手工精简全文，-140 行），未单独记版本。
+- 保留 v1.0.16 快照。
+
 ## v1.0.16
 
 - 2.2 节重构为“PR 修改前 → 修改后”对照：先给出 merge-base `37854b83` 的原自有实现（449 行，6 个符号全本地，含全本地 HCCL 发送/接收循环的内联打包与 clone-first 解包细节），再保留修改后（344 行）清单。
