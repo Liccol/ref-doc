@@ -1,6 +1,6 @@
 # Packed tensor 继承对照
 
-文档版本：**v1.0.13**。版本记录见 [CHANGELOG.md](CHANGELOG.md)；v1.0.8 及以前的流程详解、图表与真机验证记录见 [versions/](versions/README.md)。
+文档版本：**v1.0.14**。版本记录见 [CHANGELOG.md](CHANGELOG.md)；v1.0.8 及以前的流程详解、图表与真机验证记录见 [versions/](versions/README.md)。
 
 ## 1. 背景：可控范围内继承上游 vLLM 实现
 
@@ -191,7 +191,9 @@ IPC 的“硬差异”并非全部不可解——仓库 engine 层已有成熟�
 
 1. producer 的 `device="cuda"` 是函数内字面量默认值（上游 L339），ascend 无法传参绕过，需上游一行参数化；
 2. consumer 的 `rebuild_cuda_tensor` 按名导入（上游 L418），wrapper 只重绑 `torch.cuda.*` 命名空间、兜不住 reductions 模块；替换它只能做进程级 monkey patch——即 P1-2 已删除的污染模式，不能走回头路；
-3. wrapper 未重绑 `torch.cuda.get_device_properties`，补绑会扩大重绑面。
+3. wrapper 未重绑 `torch.cuda.get_device_properties`——全仓 git 历史（`-S` 检索）从未有人写过或重绑过该调用，仓内替代先例走的是 vLLM Platform 扩展点：`NPUPlatform.get_device_uuid()` 直接调 `torch.npu.get_device_properties(device_id).uuid`（无 uuid 即 RuntimeError），`num_compute_units()` 把 CUDA 的 `multi_processor_count` 概念映射为 `cube_core_num`（带两级 fallback）。
+
+**注入时的选型注意**：weight_transfer 引擎未用 platform 的 `get_device_uuid`，而是自建 `npu_generate_uuid`（host_ip + 物理 chip 号）——结合 platform 里"无 uuid 就 RuntimeError"的防御写法，说明 props.uuid 在部分 torch_npu/CANN 版本上不可靠。因此将来上游若把 uuid 查找改为可注入，ascend 侧应注入 `npu_generate_uuid` 而非 `get_device_uuid`（跨版本稳定、同 chip 进程必一致）；若上游走 Platform API 路线，则现有覆写零适配直接可用。
 
 **继承路径建议**：
 

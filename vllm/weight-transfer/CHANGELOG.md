@@ -1,5 +1,11 @@
 # Packed tensor 文档版本记录
 
+## v1.0.14
+
+- 4.6 节补充 `torch.cuda.get_device_properties` 的仓内替换先例核查：全仓 git 历史（`-S`）从未有人写过或重绑过该调用；替代先例走 vLLM Platform 扩展点（`NPUPlatform.get_device_uuid` 调 `torch.npu.get_device_properties().uuid`、`num_compute_units` 映射 cube_core_num）。
+- 新增"注入时的选型注意"：engine 自建 `npu_generate_uuid` 而非用 platform `get_device_uuid`，因 props.uuid 在部分 torch_npu/CANN 版本不可靠（platform 有 RuntimeError 防御）；将来上游注入 uuid 查找时应选 `npu_generate_uuid`。
+- 保留 v1.0.13 快照。
+
 ## v1.0.13
 
 - 新增 4.6 节“IPC cuda 绑定的可解性与继承路径”：核对仓内 `npu_ipc_engine.py` 已有的同类解法（`npu_generate_uuid` 替代 CUDA UUID、`rebuild_npu_tensor` + device_index 覆写替代 `rebuild_cuda_tensor`、torch_npu 自动 patch `reduce_tensor`、`torch_cuda_wrapper` 重绑 `torch.cuda.*`）。
