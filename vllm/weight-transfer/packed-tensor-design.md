@@ -1,20 +1,5 @@
 # Packed tensor 上游复用与 NPU 适配设计
 
-文档版本：**v1.0.19** · 更新日期：2026-11-12
-
-对应 [PR #20676](https://github.com/vllm-project/vllm-ascend/pull/20676)，代码分支为 `packed-vllm-loop-reuse`。本文的“复用”主要指**函数委托**，不涉及新增 packed 类继承。
-
-## 目录
-
-- [1. 目标与源码基准](#1-目标与源码基准)
-- [2. 复用边界与整体结构](#2-复用边界与整体结构)
-- [3. HCCL 广播路径](#3-hccl-广播路径)
-- [4. NPU IPC 路径](#4-npu-ipc-路径)
-- [5. 正确性边界与独立修复](#5-正确性边界与独立修复)
-- [6. 验证结果与后续工作](#6-验证结果与后续工作)
-
-测试配置、命令与结果见 [验证说明](packed-tensor-validation.md)；文档演进见 [版本记录](CHANGELOG.md) 和 [历史快照](versions/README.md)。
-
 ## 1. 目标
 
 重构前，Ascend 在本地维护 HCCL packed 发送和接收循环，包含打包、slot 轮转、接收与清理。即使行为与上游相近，上游修改后仍需人工同步，容易产生维护分叉。
@@ -38,54 +23,7 @@
 | producer 回调校验 | 本地 `_checked_callback` | HCCL 与 IPC 共享 dtype/numel 契约校验 |
 | 默认容量与 slot 数 | 引用上游 `DEFAULT_*` 常量 | 避免重复定义 |
 
-生产改动只落在 `packed_tensor.py`，配套修改其 UT 文件。engine 类继承、group 初始化、RPC、平台 patch 和 V2 utility 文件不在本 PR 的改动范围内。
-
-### 2.2 调用结构
-
-```mermaid
-flowchart TB
-    subgraph ASC["Ascend packed 模块"]
-        P["packed_broadcast_producer"]
-        C["packed_broadcast_consumer"]
-        G["_hccl_group / _HCCLPackedGroup"]
-        M["metadata / owning：字节元数据与 clone-first"]
-        IP["packed_npu_ipc_producer"]
-        IC["packed_npu_ipc_consumer：本地重建与解包"]
-        K["_checked_callback"]
-        D["_drain_packed_streams：异常清理"]
-    end
-    subgraph UP["安装的 vLLM packed 模块"]
-        UP1["packed_nccl_broadcast_producer"]
-        UP2["packed_nccl_broadcast_consumer"]
-        PACK["pack_tensors / PackedChunk"]
-        UNPACK["unpack_tensor：uint8 views"]
-        S["_get_streams"]
-    end
-    W["已有 torch_cuda_wrapper：NPU-only"]
-    H["已有 HCCL communicator"]
-
-    P --> UP1
-    C --> UP2
-    UP1 --> PACK
-    UP2 --> UNPACK
-    C --> M
-    P --> G
-    C --> G
-    G --> S
-    G --> W
-    G --> H
-    G -. "仅异常时" .-> D
-    P --> K
-    IP --> K
-```
-
-图中是调用和适配关系。上游函数名保留 `nccl`，但 `group` 实参是 `_HCCLPackedGroup`，最终调用已有 HCCL communicator，不创建 NCCL communicator。IPC 不调用上游 CUDA IPC producer、consumer 或 importer。
-
-### 2.3 API 适配的作用域
-
-`_hccl_group` 复用既有 `worker/v2/utils.py` 中的 `torch_cuda_wrapper`，将相关 CUDA API 映射到 NPU API。该 wrapper 是进程级重绑定，退出时不恢复，只适用于 NPU-only 进程。
-
-当前实现不重绑定 vLLM 的 `unpack_tensor` 或其他模块函数，也没有全局 owning-unpack hook。`metadata()` 和 `owning()` 都是本次 consumer 调用内的闭包。
+改动只落在 `packed_tensor.py`，配套修改其 UT 文件。engine 类继承、group 初始化、RPC、平台 patch 和 V2 utility 文件不在本 PR 的改动范围内。
 
 ## 3. HCCL 广播路径
 
@@ -166,11 +104,6 @@ sequenceDiagram
 | 在途 tensor 引用 | 上游 `in_flight` 保留 chunk；适配器另登记 slot 通信 buffer 供失败清理 | 不需要 |
 | 无条件本地 finally drain | 上游处理正常 drain，入口 context manager 处理异常 drain/storage 保留 | 不需要 |
 
-两侧都在加入 tensor 后判断累计字节数是否超过阈值，因此 HCCL 的 `buffer_size_bytes` 是分包阈值，不是 IPC 那样的固定容量。上游额外 warning 不会把大 tensor 改为拒绝发送。
-
-**结论：**打包和轮转结构可交给上游；剩余差异可封装在 callback、group 和外层 context manager 中。当前 PR 可直接调用上游 producer 主循环，但不会因此复用 NCCL communicator，也不是与旧实现逐条同步操作完全等价。
-
-修改后的通信调用顺序为：上游在 slot stream 内调用 `transport.broadcast` → 登记本 slot buffer → 同步当前 stream → 调用 `HCCL.broadcast(..., stream=当前 stream)` → 再同步当前 stream → 返回上游保存 `in_flight`。这将旧版“下一次广播前等待前一个 broadcast stream”收敛为“每次 native broadcast 返回前完成当前通信”，同步位置发生变化，不保留旧循环的所有重叠机会，也不声称有性能收益。前置同步只等待当前 slot，不自动补齐任意源 tensor 的 caller-stream 依赖。
 
 #### 修改后：委托方式
 
@@ -258,13 +191,9 @@ sequenceDiagram
 
 **结论：**上游 consumer 已有 `iterator`、`group`、`post_unpack_func` 和 `device` 四个适配入口，足以保留当前的 NPU 分配、HCCL transport、未对齐与独立存储契约。故无需保留旧接收循环，可以直接调用上游主循环；但 clone 的跨 stream 读序/生命周期仍单独处理。
 
-修改后的接收顺序为：`metadata()` 提供等字节数的 uint8 元数据 → 上游分配 NPU buffer → transport 完成 HCCL 前后同步 → 上游记录 raw buffer 的依赖与生命周期信息 → 上游只解 uint8 views → `owning()` clone 后恢复真实 dtype/shape → 调用原 loader 回调。相比旧实现，broadcast 和 callback 都处于上游的 slot stream 上下文内；旧版 broadcast 后的显式等待进入 transport，旧版内联 clone 解包进入 `owning()`。新增 clone 的保护范围仍不等于 raw buffer 的保护范围。
-
-tag v0.33.0 与图示 main 的差异：tag 在每轮开头直接同步 slot stream，没有 main 的 `slot_done` event；两者都有 `prev_received` 与 raw packed buffer 的 `record_stream`。当前 PR 复用安装版本的行为，不向 tag 回填 main 调度。
-
 #### 修改后：元数据与 owning 回调
 
-接收入口显式传入 `device=f"npu:{...}"`。`metadata()` 校验负 shape，按真实 shape 和 dtype 计算字节数，向上游提供一维 uint8 元数据，同时保存真实 shape/dtype 队列。
+接收入口显式传入 `device=f"npu:{...}"`。`metadata()` 增强校验，按真实 shape 和 dtype 计算字节数，向上游提供一维 uint8 元数据，同时保存真实 shape/dtype 队列。
 
 上游负责 chunk 划分、接收、事件与 slot 调度，并通过 `unpack_tensor` 得到 uint8 views。嵌套 `owning()` 随后逐项执行：
 
@@ -272,31 +201,9 @@ tag v0.33.0 与图示 main 的差异：tag 在每轮开头直接同步 slot stre
 uint8 字节 view → clone 独立存储 → view(真实 dtype) → reshape(真实 shape)
 ```
 
-这同时保留独立存储与未对齐混合 dtype 的兼容性。例如 BF16×3 占 6 字节，后续 INT64 的起始偏移不是 8 的倍数；连续切片的 `contiguous()` 不保证新分配，直接 `view(int64)` 可能失败。先 clone 字节再恢复 dtype 可避开原始偏移限制。
-
-`owning` 只表示输出有独立 storage，不表示它已对任意其他 stream 就绪，也不表示 allocator 已跟踪所有异步 reader。相关边界见第 5 章。
-
-### 3.3 native HCCL 同步与异常清理
-
-`_HCCLPackedGroup.broadcast` 先登记当前 slot 的通信 tensor，再同步当前 NPU stream，调用 native HCCL broadcast，最后再次同步。前置同步用于完成 torch_npu 在途工作，后置同步保证 native HCCL 访问完成后再返回上游 tensor 操作。
-
-正常路径由上游结尾 drain 所有 slot，本地不重复执行。异常时 `_drain_packed_streams` 尝试同步每个 slot，不因某个 slot 失败而跳过其余 slot；未能确认完成的非空 buffer 保留在 `_UNSYNCHRONIZED_BUFFERS`，直到进程退出。
-
-该列表只保留引用，不串行化 communicator 或 buffer 的并发访问；失败后重复重试可能持续占用显存。异常优先级规则保留原业务异常，除非清理阶段出现优先级更高的终止信号。
+这同时保留独立存储与未对齐混合 dtype 的兼容性。例如 BF16×3 占 6 字节，后续 INT64 的起始偏移不是 8 的倍数；连续切片的 `contiguous()` 不保证新分配，直接 `view(int64)` 可能失败。先 clone 字节再恢复 dtype 可避开原始偏移限制。 保持`owning` 以用于独立的存储。
 
 ## 4. NPU IPC 路径
-
-### 4.1 当前保留的本地流程
-
-| 环节 | NPU producer | NPU consumer |
-| --- | --- | --- |
-| 共享存储 | 分配固定容量 NPU buffer，通过 `reduce_tensor` 导出一次 handle 参数 | 查找物理 NPU 标识对应的 handle，校验并改写接收端 device index，用 `rebuild_npu_tensor` 重建 |
-| 元数据 | 按源 tensor 保存名称、shape、dtype 和字节数，yield dict | 校验四表长度、dtype、shape、字节数和重建 buffer 容量 |
-| 数据处理 | 回调校验后 contiguous、展平为 uint8 并 copy；单 tensor 超容量时报错 | 截取有效字节，再逐片 clone、恢复 dtype/shape |
-| chunk 边界 | yield 前同步 producer 当前 stream；复用同一共享 buffer | 返回独立存储 tensor；不引入上游 importer 缓存 |
-| 零元素输入 | 非空迭代器即使全是零元素 tensor，也发送元数据；空迭代器不发送 | 保留对应名称、类型和形状 |
-
-producer 当前 stream 的同步只证明当次写入完成。恢复 producer 生成器、复用共享 buffer 之前，接收与加载的完成关系仍依赖现有 engine/trainer 协议；不能把 Python 返回或 RPC 返回本身当作设备完成屏障。
 
 ### 4.2 IPC producer：固定 buffer 与生成器协议
 
