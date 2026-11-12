@@ -1,0 +1,48 @@
+{
+  "width": 3600,
+  "height": 5260,
+  "plates": [
+    {
+      "name": "01-inputs",
+      "x": 60,
+      "y": 170,
+      "width": 3480,
+      "height": 490
+    },
+    {
+      "name": "02-msa",
+      "x": 60,
+      "y": 710,
+      "width": 1120,
+      "height": 1940
+    },
+    {
+      "name": "03-decoder",
+      "x": 1240,
+      "y": 710,
+      "width": 1120,
+      "height": 1940
+    },
+    {
+      "name": "04-05-ffn",
+      "x": 2420,
+      "y": 710,
+      "width": 1120,
+      "height": 1940
+    },
+    {
+      "name": "06-vision",
+      "x": 60,
+      "y": 2700,
+      "width": 3480,
+      "height": 1450
+    },
+    {
+      "name": "07-runtime",
+      "x": 60,
+      "y": 4200,
+      "width": 3480,
+      "height": 930
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3480" height="930" viewBox="0 0 3480 930" role="img"><title>07-runtime</title><rect width="3480" height="930" fill="white"/><style>
+text{font-family:'Microsoft YaHei','Noto Sans CJK SC',Arial,sans-serif;fill:#22364c}
+.title{font-size:44px;font-weight:700}.head{font-size:31px;font-weight:700}
+.node{font-size:25px;font-weight:600}.body{font-size:24px}.small{font-size:22px}
+.weight{font-size:22px;fill:#59677a}.note{font-size:22px;fill:#59677a}
+</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0 0L10 5L0 10Z" fill="#617186"/></marker></defs><rect x="1" y="1" width="3478" height="928" rx="18" fill="#fbfcfe" stroke="#ad5a53" stroke-width="1.7"/>
+<text x="28" y="49" class="head" text-anchor="start">07 逐 token 轮转、cache 地址与可选 DSpark：参数不变，激活与状态推进</text>
+<line x1="28" y1="75" x2="3452" y2="75" stroke="#ad5a53" opacity=".35"/>
+<rect x="35" y="110" width="740" height="212" rx="10" fill="#fff0ee" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="712" x="405.0" y="145" class="node" text-anchor="middle">Prefill：B=2，S=256，P=0</text>
+<text data-max-width="712" x="405.0" y="180" class="body" text-anchor="middle">IDs [2,256] → 打包 [512]</text>
+<text data-max-width="712" x="405.0" y="215" class="body" text-anchor="middle">hidden [512,6144]；每请求缓存长 256</text>
+<text data-max-width="712" x="405.0" y="250" class="body" text-anchor="middle">末位置 logits [2,200064]</text>
+<text data-max-width="712" x="405.0" y="285" class="body" text-anchor="middle">采样第 257 个 ID，尚未写入其 KV</text>
+<rect x="905" y="110" width="740" height="212" rx="10" fill="#fff0ee" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="712" x="1275.0" y="145" class="node" text-anchor="middle">Decode 1：P=256，S=1</text>
+<text data-max-width="712" x="1275.0" y="180" class="body" text-anchor="middle">输入刚采样的 ID [2,1]，position=256</text>
+<text data-max-width="712" x="1275.0" y="215" class="body" text-anchor="middle">hidden [2,6144]；本轮 K/V 各 [2,4,128]</text>
+<text data-max-width="712" x="1275.0" y="250" class="body" text-anchor="middle">每层缓存长度 256 → 257，逻辑块 2 → 3</text>
+<text data-max-width="712" x="1275.0" y="285" class="body" text-anchor="middle">采样第 258 个 ID，下一轮再进入缓存</text>
+<rect x="1775" y="110" width="740" height="212" rx="10" fill="#fff0ee" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="712" x="2145.0" y="145" class="node" text-anchor="middle">Decode 2：P=257，S=1</text>
+<text data-max-width="712" x="2145.0" y="180" class="body" text-anchor="middle">输入第 258 个 ID，position=257</text>
+<text data-max-width="712" x="2145.0" y="215" class="body" text-anchor="middle">hidden [2,6144]；Q [2,64,128]</text>
+<text data-max-width="712" x="2145.0" y="250" class="body" text-anchor="middle">每层缓存长度 257 → 258；当前块仍为 2</text>
+<text data-max-width="712" x="2145.0" y="285" class="body" text-anchor="middle">重复 60 层 → logits → 第 259 个 ID</text>
+<rect x="2645" y="110" width="800" height="212" rx="10" fill="#fff0ee" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="772" x="3045.0" y="145" class="node" text-anchor="middle">新 token 的下一轮闭环</text>
+<text data-max-width="772" x="3045.0" y="180" class="body" text-anchor="middle">采样 ID → Embedding → 60 层</text>
+<text data-max-width="772" x="3045.0" y="215" class="body" text-anchor="middle">新 K/V 写槽 → index 选块 → attention</text>
+<text data-max-width="772" x="3045.0" y="250" class="body" text-anchor="middle">旧 Q 不缓存；旧 K/V 不逐轮重算</text>
+<text data-max-width="772" x="3045.0" y="285" class="body" text-anchor="middle">未选旧块保留，后续 query 可重新选中</text>
+<polyline points="775,216 905,216" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="1645,216 1775,216" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="2515,216 2645,216" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="35" y="380" width="1610" height="247" rx="10" fill="#fff0ee" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="1582" x="840.0" y="415" class="node" text-anchor="middle">分页地址例：假设 cache 页也为 128 token</text>
+<text data-max-width="1582" x="840.0" y="450" class="body" text-anchor="middle">block_table=[9,2,15]；逻辑位置 256 → 第 2 块、offset 0</text>
+<text data-max-width="1582" x="840.0" y="485" class="body" text-anchor="middle">物理页=15；slot=15×128+0=1920；位置 257 写 slot 1921</text>
+<text data-max-width="1582" x="840.0" y="520" class="body" text-anchor="middle">每层每历史 token：K 512 + V 512 + index K 128 = 1152 标量</text>
+<text data-max-width="1582" x="840.0" y="555" class="body" text-anchor="middle">若三类皆 BF16：60 层共 135 KiB/token；未含页尾、scale 与工作区</text>
+<text data-max-width="1582" x="840.0" y="590" class="weight" text-anchor="middle">MSA 选择块=128 与 allocator 物理页是不同概念，不保证所有后端相同</text>
+<rect x="1775" y="380" width="1670" height="247" rx="10" fill="#eef5fb" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="1642" x="2610.0" y="415" class="node" text-anchor="middle">可选 DSpark 草稿分支：不属于 target 的第 61–65 层</text>
+<text data-max-width="1642" x="2610.0" y="450" class="body" text-anchor="middle">target 层 [3,17,31,45,59] hidden，各 [N,6144]</text>
+<text data-max-width="1642" x="2610.0" y="485" class="body" text-anchor="middle">拼接 [N,30720] → fc W [6144,30720] → [N,6144]</text>
+<text data-max-width="1642" x="2610.0" y="520" class="body" text-anchor="middle">Draft ×5：64/4 heads ×128；Dense I=12288；sliding window=4096</text>
+<text data-max-width="1642" x="2610.0" y="555" class="body" text-anchor="middle">Markov rank=256；confidence W [1,6400]；block_size=7</text>
+<text data-max-width="1642" x="2610.0" y="590" class="weight" text-anchor="middle">候选 → target 验证 → 接受部分并推进/回退状态；7 不等于每步必接收 7 token</text>
+<rect x="35" y="685" width="3410" height="177" rx="10" fill="#f3f6fa" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="3382" x="1740.0" y="720" class="node" text-anchor="middle">读图约定：激活 shape 默认全局逻辑维度；Linear 权重为 [out,in]，计算 X·Wᵀ；不同层独立权重、独立 KV 内容。</text>
+<text data-max-width="3382" x="1740.0" y="755" class="body" text-anchor="middle">TP/EP/量化会改变本地或文件布局：如 TP=4 的五路投影本地宽度为 2560；NVFP4 的单 expert W1 逻辑 [3072,6144]，U8 打包 [3072,3072]。</text>
+<text data-max-width="3382" x="1740.0" y="790" class="body" text-anchor="middle">实线为本区数据流；折线路径为分支/残差；编号为跨区模块引用。本图按固定配置与本地实现静态核验，示例不是模型真实激活。</text>
+<text data-max-width="3382" x="1740.0" y="825" class="body" text-anchor="middle">来源：HF ce7f4df87d2e05262f5775f373dac4772f134041；architecture/sources 配置与 73 项 header 抽样；公式和来源详见 model_analyze.md。</text></svg>

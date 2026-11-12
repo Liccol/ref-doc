@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="1940" viewBox="0 0 1120 1940" role="img"><title>02-msa</title><rect width="1120" height="1940" fill="white"/><style>
+text{font-family:'Microsoft YaHei','Noto Sans CJK SC',Arial,sans-serif;fill:#22364c}
+.title{font-size:44px;font-weight:700}.head{font-size:31px;font-weight:700}
+.node{font-size:25px;font-weight:600}.body{font-size:24px}.small{font-size:22px}
+.weight{font-size:22px;fill:#59677a}.note{font-size:22px;fill:#59677a}
+</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0 0L10 5L0 10Z" fill="#617186"/></marker></defs><rect x="1" y="1" width="1118" height="1938" rx="18" fill="#fbfcfe" stroke="#b9741d" stroke-width="1.7"/>
+<text x="28" y="49" class="head" text-anchor="start">02 MSA：所有 60 层一致，展开一层</text>
+<line x1="28" y1="75" x2="1092" y2="75" stroke="#b9741d" opacity=".35"/>
+<rect x="235" y="105" width="650" height="102" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="622" x="560.0" y="140" class="node" text-anchor="middle">归一化输入 H [N,6144]</text>
+<text data-max-width="622" x="560.0" y="175" class="weight" text-anchor="middle">来自 03 的 Norm₁；位置 positions [N]</text>
+<polyline points="560,207 560,233 285,233 285,260" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="560,233 835,233 835,260" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="35" y="260" width="500" height="177" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="472" x="285.0" y="295" class="node" text-anchor="middle">主 Q / K / V 三个 Linear</text>
+<text data-max-width="472" x="285.0" y="330" class="body" text-anchor="middle">Q [N,8192]；K/V 各 [N,512]</text>
+<text data-max-width="472" x="285.0" y="365" class="weight" text-anchor="middle">Wq [8192,6144]</text>
+<text data-max-width="472" x="285.0" y="400" class="weight" text-anchor="middle">Wk / Wv 各 [512,6144]</text>
+<rect x="585" y="260" width="500" height="177" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="472" x="835.0" y="295" class="node" text-anchor="middle">index Q / K 两个 Linear</text>
+<text data-max-width="472" x="835.0" y="330" class="body" text-anchor="middle">iQ [N,512]；iK [N,128]</text>
+<text data-max-width="472" x="835.0" y="365" class="weight" text-anchor="middle">WiQ [512,6144]</text>
+<text data-max-width="472" x="835.0" y="400" class="weight" text-anchor="middle">WiK [128,6144]</text>
+<polyline points="285,437 285,475" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="835,437 835,475" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="35" y="475" width="500" height="137" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="472" x="285.0" y="510" class="node" text-anchor="middle">reshape：只重排，不改数值</text>
+<text data-max-width="472" x="285.0" y="545" class="body" text-anchor="middle">Q [N,64,128]</text>
+<text data-max-width="472" x="285.0" y="580" class="body" text-anchor="middle">K / V 各 [N,4,128]</text>
+<rect x="585" y="475" width="500" height="137" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="472" x="835.0" y="510" class="node" text-anchor="middle">reshape：只重排，不改数值</text>
+<text data-max-width="472" x="835.0" y="545" class="body" text-anchor="middle">iQ [N,4,128]</text>
+<text data-max-width="472" x="835.0" y="580" class="body" text-anchor="middle">iK [N,1,128]</text>
+<polyline points="285,612 285,650" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="835,612 835,650" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="35" y="650" width="500" height="177" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="472" x="285.0" y="685" class="node" text-anchor="middle">Q/K per-head GemmaRMSNorm</text>
+<text data-max-width="472" x="285.0" y="720" class="body" text-anchor="middle">每头 128 维；W 各 [128]</text>
+<text data-max-width="472" x="285.0" y="755" class="body" text-anchor="middle">partial RoPE：前 64 维旋转</text>
+<text data-max-width="472" x="285.0" y="790" class="weight" text-anchor="middle">后 64 维不变；V 不做 Norm/RoPE</text>
+<rect x="585" y="650" width="500" height="177" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="472" x="835.0" y="685" class="node" text-anchor="middle">iQ/iK per-head GemmaRMSNorm</text>
+<text data-max-width="472" x="835.0" y="720" class="body" text-anchor="middle">每头 128 维；W 各 [128]</text>
+<text data-max-width="472" x="835.0" y="755" class="body" text-anchor="middle">partial RoPE：前 64 维旋转</text>
+<text data-max-width="472" x="835.0" y="790" class="weight" text-anchor="middle">θ=10⁷；iK 在 4 个 iQ 头间共享</text>
+<polyline points="285,827 285,865" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="835,827 835,865" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="35" y="865" width="500" height="137" rx="10" fill="#fff0ee" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="472" x="285.0" y="900" class="node" text-anchor="middle">K/V 按 slot_mapping 写缓存</text>
+<text data-max-width="472" x="285.0" y="935" class="body" text-anchor="middle">每请求 K/V 各 [Tᵢ,4,128]</text>
+<text data-max-width="472" x="285.0" y="970" class="body" text-anchor="middle">旧缓存 + 本轮 K/V → 可读取历史</text>
+<rect x="585" y="865" width="500" height="137" rx="10" fill="#fff0ee" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="472" x="835.0" y="900" class="node" text-anchor="middle">index K 按槽位写缓存</text>
+<text data-max-width="472" x="835.0" y="935" class="body" text-anchor="middle">每请求 iK [Tᵢ,1,128]</text>
+<text data-max-width="472" x="835.0" y="970" class="body" text-anchor="middle">iQ 只用于本轮查询，不保留历史</text>
+<polyline points="835,1002 835,1040" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="585" y="1040" width="500" height="177" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="472" x="835.0" y="1075" class="node" text-anchor="middle">index 点积 → 按块 max</text>
+<text data-max-width="472" x="835.0" y="1110" class="body" text-anchor="middle">I[n,h,m] = maxⱼ ⟨iQₙₕ,iKⱼ⟩</text>
+<text data-max-width="472" x="835.0" y="1145" class="body" text-anchor="middle">block=128；Mᵢ=ceil(Tᵢ/128)</text>
+<text data-max-width="472" x="835.0" y="1180" class="body" text-anchor="middle">每个查询、每个 iQ 头分别评分</text>
+<polyline points="835,1217 835,1255" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="585" y="1255" width="500" height="177" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="472" x="835.0" y="1290" class="node" text-anchor="middle">因果边界 + 强制 local + Top-K</text>
+<text data-max-width="472" x="835.0" y="1325" class="body" text-anchor="middle">init=0；local=1；Top-K blocks=16</text>
+<text data-max-width="472" x="835.0" y="1360" class="body" text-anchor="middle">块 ID：概念容量 [N,4,16]</text>
+<text data-max-width="472" x="835.0" y="1395" class="weight" text-anchor="middle">local 占用 Top-K 预算；无效槽屏蔽</text>
+<rect x="35" y="1070" width="500" height="177" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="472" x="285.0" y="1105" class="node" text-anchor="middle">本轮主 Q 直接进入 attention</text>
+<text data-max-width="472" x="285.0" y="1140" class="body" text-anchor="middle">64 Q heads : 4 KV heads</text>
+<text data-max-width="472" x="285.0" y="1175" class="body" text-anchor="middle">组 g=floor(q_head/16)</text>
+<text data-max-width="472" x="285.0" y="1210" class="body" text-anchor="middle">每组使用对应 index head 的块集</text>
+<polyline points="535,738 550,738 550,1030 285,1030 285,1070" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="285,1002 285,1018 15,1018 15,1570 85,1570" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="835,1432 835,1480" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="285,1247 285,1480" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="85" y="1480" width="950" height="177" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="922" x="560.0" y="1515" class="node" text-anchor="middle">按选中块读取主 K/V → 主 sparse attention</text>
+<text data-max-width="922" x="560.0" y="1550" class="body" text-anchor="middle">logits=QKᵀ/√128 → causal mask → softmax → 加权 V</text>
+<text data-max-width="922" x="560.0" y="1585" class="body" text-anchor="middle">每头在有效选中 key 上归一化；输出 [N,64,128]</text>
+<text data-max-width="922" x="560.0" y="1620" class="weight" text-anchor="middle">每 KV 组最多 16×128 个候选位置；不物化完整 N×T 主分数</text>
+<polyline points="560,1657 560,1695" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="135" y="1695" width="850" height="102" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="822" x="560.0" y="1730" class="node" text-anchor="middle">merge heads [N,8192] → O Linear → A [N,6144]</text>
+<text data-max-width="822" x="560.0" y="1765" class="weight" text-anchor="middle">Wo [6144,8192]；返回 03 第一次残差加法</text>
+<text x="40" y="1840" class="small" text-anchor="start">融合可将五路投影合成 [N,9856]，逻辑分支仍如上。</text>
+<text x="40" y="1878" class="small" text-anchor="start">这里的 index Top-K 选择块；MoE Top-K 选择专家（见 05）。</text></svg>

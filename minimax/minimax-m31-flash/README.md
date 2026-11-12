@@ -4,7 +4,9 @@
 
 ## 入口
 
+- [详细架构图：完整层级、入参及张量流转](architecture/minimax-m31-detailed-architecture.png) · [可编辑 SVG](architecture/minimax-m31-detailed-architecture.svg) · [分区放大阅读](architecture/detailed/README.md)。同构层只展开一次，包含 MSA、Dense/MoE、ViT、视觉融合及 decode 缓存更新。
 - [模型结构说明与完整参数表](architecture/README.md)：主干、MSA/indexer、残差、专家及视觉融合。
+- [逐步张量 shape 与数值流转详解](model_analyze.md)：输入接口、QKV/indexer、MoE 分发回收、prefill/decode 算例、视觉 patch、KV 分页、TP/EP 与量化存储；附固定版本配置和官方权重 header 抽样。
 - [高清模型图 4800×5560](architecture/minimax-m31-full-architecture.png) · [可编辑 SVG](architecture/minimax-m31-full-architecture.svg)。
 - [全层测试：服务启动、测试命令、结果及边界](full/README.md)。
 - [验证详单：逐轮比较、显存与失败诊断](full/VALIDATION_DETAILS.md)。
