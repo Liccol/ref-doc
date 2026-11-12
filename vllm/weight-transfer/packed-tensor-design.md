@@ -15,43 +15,15 @@
 
 测试配置、命令与结果见 [验证说明](packed-tensor-validation.md)；文档演进见 [版本记录](CHANGELOG.md) 和 [历史快照](versions/README.md)。
 
-## 1. 目标与源码基准
-
-### 1.1 要解决的问题
+## 1. 目标
 
 重构前，Ascend 在本地维护 HCCL packed 发送和接收循环，包含打包、slot 轮转、接收与清理。即使行为与上游相近，上游修改后仍需人工同步，容易产生维护分叉。
 
-本 PR 将 HCCL 主循环委托给安装的 vLLM，只保留 NPU transport、元数据、独立存储及异常清理适配。NPU IPC 保持本地实现，共享常量与回调校验。公共 API、配置和传输协议保持现有契约。
+本 PR 将 HCCL 主循环委托给 vLLM，只保留 NPU 特异性实现。
 
 本 PR 的范围是复用重构。跨 stream 读序、clone 生命周期和 IPC 导入引用计数等问题分别处理，不随本 PR 引入修复，也不因复用上游而视为解决。
 
-### 1.2 固定源码基准
-
-| 组件 | 对照版本 | 用途 |
-| --- | --- | --- |
-| vLLM Ascend | `870b61a90f299d10728b94080089eb5ab5095c4b` | 当前继承 PR，含最终 drain 测试修订 |
-| vLLM tag | v0.33.0，`4ba787ec9959e566d3b587a796dff07673324da5` | tag 配套验证 |
-| vLLM main | `24420b7a341af37a9bc3186e6fc6062512e0aa58` | main 配套验证及逐环节对照 |
-| Ascend 历史基线 | `37854b83` | 仅解释重构前的本地循环 |
-
-源码入口：[Ascend packed 模块](https://github.com/vllm-project/vllm-ascend/blob/870b61a90f299d10728b94080089eb5ab5095c4b/vllm_ascend/distributed/weight_transfer/packed_tensor.py)、[vLLM main packed 模块](https://github.com/vllm-project/vllm/blob/24420b7a341af37a9bc3186e6fc6062512e0aa58/vllm/distributed/weight_transfer/packed_tensor.py)、[vLLM tag packed 模块](https://github.com/vllm-project/vllm/blob/4ba787ec9959e566d3b587a796dff07673324da5/vllm/distributed/weight_transfer/packed_tensor.py)。内部事件和 IPC importer 的描述以固定 main 为准；运行时直接调用安装版本，不复制 main 实现覆盖 tag。
-
-### 1.3 时序对照的读法
-
-第 3、4 章先对照**重构前**的两份实现：vLLM main `24420b7a` 与 [Ascend 历史基线 `37854b83`](https://github.com/vllm-project/vllm-ascend/blob/37854b83ed4c91f90dc609d62d1e90e351005315/vllm_ascend/distributed/weight_transfer/packed_tensor.py)。每个方法分别画出两张时序图，再逐项说明当前 PR `870b61a90` 如何处理差异，最后得出复用结论。图中的 Ascend 旧实现不包含本 PR 的适配器，不能与修改后的调用结构混用。
-
-| 方法 | 时序对照与图后适配说明 |
-| --- | --- |
-| HCCL producer | [3.1 发送主循环](#31-producer主循环委托) |
-| HCCL consumer | [3.2 接收与 owning 回调](#32-consumer字节元数据与独立存储) |
-| IPC producer | [4.2 固定 buffer 与生成器](#42-ipc-producer固定-buffer-与生成器协议) |
-| IPC consumer | [4.3 标识、导入和解包](#43-ipc-consumer标识导入生命周期与解包) |
-
-箭头表示 Python 调用或设备工作提交顺序，不表示每一步设备操作已完成；图中显式 `synchronize` 才是对应 stream 的主机等待。循环表示单侧函数自身的执行，不是两套实现同时运行。HCCL 图展开有 payload 的 chunk，EOF 剩余 chunk 走同一收发步骤；没有剩余 tensor 时跳出，不发空广播。异常只展开与复用边界相关的清理路径。
-
-HCCL 两个方法的结论是“**通过现有参数、回调和 group 接口适配后，直接调用上游主循环**”，不是完全原样使用 NCCL 实现。IPC 的结论是“**当前接口下不能保持现有 NPU 契约并直接委托**”，不是未来不可通过扩展点改造实现复用。
-
-## 2. 复用边界与整体结构
+## 2. 整体结构
 
 ### 2.1 职责分工
 
