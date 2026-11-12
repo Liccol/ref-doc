@@ -1,5 +1,21 @@
 # Packed tensor 文档版本记录
 
+## v1.0.19（2026-11-12）
+
+- 按 HCCL/IPC × producer/consumer 四个方法增加八张修改前时序图，固定对照 vLLM main `24420b7a` 和 Ascend 历史基线 `37854b83`，与当前 PR `870b61a90` 明确区分。
+- 每组图后说明逐项差异、适配位置、剩余限制和复用结论。HCCL 细化 native stream 转发、前后同步、metadata uint8 转换、owning 回调、cache key 与异常清理，明确同步边界和调度发生变化。
+- IPC 从函数内部固定 device、UUID、零元素 yield、clone-first 解包与 importer 生命周期推导当前不可直接委托的原因；区分可包装适配项和缺少扩展点的内部操作。
+- 补充 tag/main consumer 的 slot stream 同步与 `slot_done` 差异。验证结果不变，没有新增硬件测试；保留 v1.0.18 设计快照。
+
+## v1.0.18（2026-11-12）
+
+- 将主文档按“目标与源码基准 → 复用边界 → HCCL → IPC → 正确性边界 → 验证摘要”组织，增加目录和固定源码链接，合并重复的方法清单与继承判定，统一使用函数委托/复用表述。
+- 源码基准更新为 Ascend `870b61a90`，列明 vLLM v0.33.0 `4ba787ec` 和 main `24420b7a`；删除易过期的源码行数与旧提交标记。
+- 澄清 owning 仅保证独立存储，区分 raw buffer 保护与 clone 读序/生命周期。跨 stream 修复留在独立分支，未并入本 PR。
+- 修正 IPC 复用限制：main 的 importer 可通过参数与覆写适配重建；device、标识查找、协议、零元素和 clone-first 解包需要分别处理，不再将它们都称为不可绕过的 CUDA 障碍。
+- 新增 `packed-tensor-validation.md`，记录两套各 186 UT、5/5 真实 NPU E2E 通过，以及运行前代码核对、裁层模型、graph 配置和验证限制。替代旧正文中完整 UT/E2E 尚未执行的状态；此次文档整理没有新增硬件测试。
+- 更新 README 的过期版本号，增加阅读顺序与目录结构。从已发布提交 `1c72a05` 补齐原目录链接缺失的 v1.0.17 快照；另存 v1.0.18 前的检视修订正文，保留文档脱敏约定。
+
 ## v1.0.17
 
 - 3.1 继承关系图刷新：新增“修改前（merge-base 37854b83，449 行）”来源节点（对应 2.2 的修改前对照）；“未继承”黑盒拆分为三个具体节点——producer 差 `device=cuda` 传参、consumer/PackedBufferImporter 差 `rebuild_cuda_tensor` 与 uuid 获取、`PackedIpcChunk` 协议选型，与第 3 章表格及 4.5 函数调用缺口对齐。

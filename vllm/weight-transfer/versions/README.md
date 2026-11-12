@@ -20,5 +20,7 @@
 - [v1.0.15](packed-tensor-design-v1.0.15.md)
 - [v1.0.16](packed-tensor-design-v1.0.16.md)
 - [v1.0.17](packed-tensor-design-v1.0.17.md)
+- [v1.0.18 前检视修订快照](packed-tensor-design-before-v1.0.18.md)：v1.0.17 后的正文，原稿未标独立版本；保留其当时的测试状态，不覆盖 v1.0.17。
+- [v1.0.18](packed-tensor-design-v1.0.18.md)：按职责整理设计，分离双配套验证说明。
 
 [当前版本](../packed-tensor-design.md) · [版本记录](../CHANGELOG.md)
