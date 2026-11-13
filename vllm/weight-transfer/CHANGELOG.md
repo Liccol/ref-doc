@@ -1,5 +1,11 @@
 # Packed tensor 文档版本记录
 
+## v1.0.24（2026-11-13）
+
+- 删除 HCCL producer 图和当前正文中的 P1～P6 对照标签，保留步骤名称及 Mermaid 自动编号。
+- 在跨 stream 等待的差异点直接添加注释，图后说明改用操作名称引用，避免把对照标签误认为源码阶段或 stream 编号。
+- 保留 v1.0.23 脱敏快照；实现与验证结果不变。
+
 ## v1.0.23（2026-11-13）
 
 - 第 7 章收敛为 IPC 硬件扩展点，仅保留 producer device、consumer 显式 handle key 和 importer 重建函数注入，以及对应兼容/验证要求。

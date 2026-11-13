@@ -26,5 +26,6 @@
 - [v1.0.20](packed-tensor-design-v1.0.20.md)：统一 HCCL producer 图示，展开适配器通信保序。
 - [v1.0.21](packed-tensor-design-v1.0.21.md)：明确 `PackedIpcChunk` 可适配，并解释零元素 chunk 的 yield。
 - [v1.0.22](packed-tensor-design-v1.0.22.md)：记录硬件扩展与语义修复的初步上游建议。
+- [v1.0.23](packed-tensor-design-v1.0.23.md)：上游建议收敛为三个 IPC 硬件扩展点。
 
 [当前版本](../packed-tensor-design.md) · [版本记录](../CHANGELOG.md)

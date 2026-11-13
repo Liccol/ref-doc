@@ -1,6 +1,6 @@
 # Weight transfer 设计文档
 
-- [Packed tensor 上游复用与 NPU 适配设计](packed-tensor-design.md)：当前版本 **v1.0.23**，逐一对照 HCCL/IPC producer/consumer 重构前时序，并在图后说明差异适配和复用结论。
+- [Packed tensor 上游复用与 NPU 适配设计](packed-tensor-design.md)：当前版本 **v1.0.24**，逐一对照 HCCL/IPC producer/consumer 重构前时序，并在图后说明差异适配和复用结论。
 - [双配套验证说明](packed-tensor-validation.md)：记录当前 PR 对 vLLM v0.33.0 和固定 main 的 UT/E2E 结果、配置及限制，不含部署定位信息。
 - [文档版本记录](CHANGELOG.md)：记录每次修改的版本及内容。
 - [历史快照](versions/README.md)：保留各阶段原有设计结论，不作为当前实现或测试状态。

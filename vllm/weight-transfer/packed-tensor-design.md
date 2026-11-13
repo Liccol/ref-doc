@@ -29,7 +29,7 @@
 
 ### 3.1 producer：主循环委托
 
-下面两张修改前的图统一使用 producer、slot streams、callback、communicator 四类参与者，按 P1～P6 对齐共同骨架。上游 `pack_tensors` 与旧 Ascend 内联打包在图中都归入 producer 内部，避免函数拆分方式造成视觉上的流程差异。
+下面两张修改前的图统一使用 producer、slot streams、callback、communicator 四类参与者，保留步骤名称，在差异处直接标注说明。上游 `pack_tensors` 与旧 Ascend 内联打包在图中都归入 producer 内部，避免函数拆分方式造成视觉上的流程差异。
 
 #### 修改前：vLLM producer
 
@@ -42,19 +42,19 @@ sequenceDiagram
     participant G as NCCL group
     L->>S: _get_streams(device_idx, num_buffers)
     loop 每个有 payload 的 chunk
-        L->>S: P1 synchronize 当前 slot
+        L->>S: synchronize 当前 slot
         L->>L: 清除当前 slot 的 in_flight 引用
         L->>S: 进入当前 slot stream 上下文
         loop 取 tensor，直到总字节数大于阈值或 EOF
-            L->>F: P2 callback(next(iterator))
+            L->>F: callback(next(iterator))
             F-->>L: tensor（无 dtype/numel 契约校验）
             L->>L: contiguous / view(-1) / view(uint8)，累加字节
         end
-        L->>L: P3 cat，构造 PackedChunk
-        Note over L: P2、P3 实际由 pack_tensors 完成；超阈值可 warning
-        Note over L,G: P4 本循环没有显式等待另一个 slot 的前次通信
-        L->>G: P5 broadcast(packed, src)
-        L->>L: P6 保存 in_flight，轮转 slot
+        L->>L: cat，构造 PackedChunk
+        Note over L: 回调处理与拼接实际由 pack_tensors 完成；超阈值可 warning
+        Note over L,G: 本循环没有显式等待另一个 slot 的前次通信
+        L->>G: broadcast(packed, src)
+        L->>L: 保存 in_flight，轮转 slot
         L->>S: 退出 slot stream 上下文
     end
     L->>S: 正常结束时依次 drain 所有 slot
@@ -73,19 +73,20 @@ sequenceDiagram
     L->>L: 校验容量和 slot 数为正
     L->>S: 新建 num_buffers 个 torch.npu.Stream
     loop 每个有 payload 的 chunk
-        L->>S: P1 等待当前 slot，进入其 stream 上下文
+        L->>S: 等待当前 slot，进入其 stream 上下文
         loop 取 tensor，直到总字节数大于阈值或 EOF
-            L->>F: P2 callback(next(iterator))
+            L->>F: callback(next(iterator))
             F-->>L: tensor
             L->>L: 校验 Tensor / dtype / numel
             L->>L: contiguous / reshape(-1) / view(uint8)，累加字节
         end
-        L->>L: P3 cat，保存在 packed_tensors[slot]
+        L->>L: cat，保存在 packed_tensors[slot]
         opt 上一次广播位于另一个 slot
-            L->>S: P4 synchronize previous_broadcast_stream
+            Note over L,S: 旧 Ascend 额外等待前次广播 stream；上游循环无此显式步骤
+            L->>S: synchronize previous_broadcast_stream
         end
-        L->>G: P5 broadcast(packed, src, stream=当前 slot)
-        L->>L: P6 保存 previous_broadcast_stream
+        L->>G: broadcast(packed, src, stream=当前 slot)
+        L->>L: 保存 previous_broadcast_stream
         L->>S: 退出 slot stream 上下文
         L->>L: 轮转 slot
     end
@@ -95,11 +96,11 @@ sequenceDiagram
     end
 ```
 
-**图后对照：共同骨架相同，P4 的保序不能省略解释。**
+**图后对照：共同骨架相同，跨 slot 通信保序存在差异。**
 
-两侧都是“等待当前 slot → callback 与字节打包 → broadcast → 轮转 slot → 最终 drain”。旧 Ascend 额外在 P4 等待前一次广播所在的其他 stream，避免同一 communicator 上前后两次通信跨 stream 重叠。
+两侧都是“等待当前 slot → callback 与字节打包 → broadcast → 轮转 slot → 最终 drain”。旧 Ascend 在本次广播前额外等待前一次广播所在的其他 stream，避免同一 communicator 上前后两次通信跨 stream 重叠。
 
-上游 P1 等待的是**当前 slot 的上次工作**，不能单凭这一行证明**另一个 slot 的前次广播**已完成；`in_flight` 保留引用也不是跨 stream 完成屏障。因此，不能只删去旧 P4、直接把 native HCCL 对象传给上游，再声称其已经提供相同保序。这里不对原生 NCCL 路径是否需要相同等待作判断，NCCL 与 HCCL 的通信语义不能直接互推。
+上游轮次开头等待的是**当前 slot 的上次工作**，不能单凭这一行证明**另一个 slot 的前次广播**已完成；`in_flight` 保留引用也不是跨 stream 完成屏障。因此，不能只删去旧版等待前次广播 stream 的操作、直接把 native HCCL 对象传给上游，再声称其已经提供相同保序。这里不对原生 NCCL 路径是否需要相同等待作判断，NCCL 与 HCCL 的通信语义不能直接互推。
 
 **差异如何收敛到上游入口：**
 
@@ -107,7 +108,7 @@ sequenceDiagram
 | --- | --- | --- |
 | 本地 streams 与 CUDA streams | 既有 wrapper 映射 API；适配器和上游共用 `_get_streams` 的相同缓存键 | 不需要 |
 | 内联打包与回调校验 | 打包交给 `pack_tensors`，回调外包 `_checked_callback` | 不需要 |
-| P4 跨 slot 通信次序与 P5 显式 stream | group 替换为 `_HCCLPackedGroup`；在当前 NPU stream 上执行广播前后同步，后同步完成后主机才进入下一轮 | 不需要，但保序由本地 transport 承担；同步位置与重叠行为改变 |
+| 跨 slot 通信次序与显式 stream | group 替换为 `_HCCLPackedGroup`；在当前 NPU stream 上执行广播前后同步，后同步完成后主机才进入下一轮 | 不需要，但保序由本地 transport 承担；同步位置与重叠行为改变 |
 | 在途 tensor 引用 | 上游 `in_flight` 保留 chunk；适配器另登记 slot 通信 buffer 供失败清理 | 不需要 |
 | 无条件本地 finally drain | 上游处理正常 drain，入口 context manager 处理异常 drain/storage 保留 | 不需要 |
 
@@ -149,7 +150,7 @@ sequenceDiagram
 | 打包与 native HCCL 的衔接 | 旧循环显式指定 slot stream | transport 前同步后显式传当前 NPU stream，再后同步 |
 | 与上游原循环的关系 | 旧 Ascend 自己维护循环 | 上游维护循环，Ascend transport 补足通信边界 |
 
-因此，当前调用链中的 HCCL 跨 slot 通信保序仍在，但由适配器以更保守的完成等待实现；不能据此认为“上游 producer 自带旧版 P4”。原来 B 打包与 A 通信重叠的机会可能减少，尚无性能收益或回退幅度的测量结论。
+因此，当前调用链中的 HCCL 跨 slot 通信保序仍在，但由适配器以更保守的完成等待实现；不能据此认为上游 producer 自带旧版的跨 stream 广播等待。原来 B 打包与 A 通信重叠的机会可能减少，尚无性能收益或回退幅度的测量结论。
 
 该结论限于同一次 producer 调用顺序，不保护其他线程/调用并发共享 communicator；前同步也只等待当前 slot，不补齐任意源 tensor 的 caller-stream 依赖。异常时仍由外层 context manager 执行本地 drain 和失败 storage 保留。
 
