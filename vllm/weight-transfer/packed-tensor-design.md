@@ -1,58 +1,14 @@
 # Packed tensor 上游复用与 NPU 适配设计
 
-文档版本：**v1.0.23** · 更新日期：2026-11-13
-
-对应 [PR #20676](https://github.com/vllm-project/vllm-ascend/pull/20676)，代码分支为 `packed-vllm-loop-reuse`。本文的“复用”主要指**函数委托**，不涉及新增 packed 类继承。
-
-## 目录
-
-- [1. 目标与源码基准](#1-目标与源码基准)
-- [2. 复用边界与整体结构](#2-复用边界与整体结构)
-- [3. HCCL 广播路径](#3-hccl-广播路径)
-- [4. NPU IPC 路径](#4-npu-ipc-路径)
-- [5. 正确性边界与独立修复](#5-正确性边界与独立修复)
-- [6. 验证结果与后续工作](#6-验证结果与后续工作)
-- [7. 建议提交给 vLLM 的 IPC 硬件扩展点](#7-建议提交给-vllm-的-ipc-硬件扩展点)
-
-测试配置、命令与结果见 [验证说明](packed-tensor-validation.md)；文档演进见 [版本记录](CHANGELOG.md) 和 [历史快照](versions/README.md)。
-
-## 1. 目标与源码基准
-
-### 1.1 要解决的问题
+## 1. 目标
 
 重构前，Ascend 在本地维护 HCCL packed 发送和接收循环，包含打包、slot 轮转、接收与清理。即使行为与上游相近，上游修改后仍需人工同步，容易产生维护分叉。
 
-本 PR 将 HCCL 主循环委托给安装的 vLLM，只保留 NPU transport、元数据、独立存储及异常清理适配。NPU IPC 保持本地实现，共享常量与回调校验。公共 API、配置和传输协议保持现有契约。
+本 PR 将 HCCL 主循环委托给 vLLM，只保留 NPU 特异性实现。
 
 本 PR 的范围是复用重构。跨 stream 读序、clone 生命周期和 IPC 导入引用计数等问题分别处理，不随本 PR 引入修复，也不因复用上游而视为解决。
 
-### 1.2 固定源码基准
-
-| 组件 | 对照版本 | 用途 |
-| --- | --- | --- |
-| vLLM Ascend | `870b61a90f299d10728b94080089eb5ab5095c4b` | 当前继承 PR，含最终 drain 测试修订 |
-| vLLM tag | v0.33.0，`4ba787ec9959e566d3b587a796dff07673324da5` | tag 配套验证 |
-| vLLM main | `24420b7a341af37a9bc3186e6fc6062512e0aa58` | main 配套验证及逐环节对照 |
-| Ascend 历史基线 | `37854b83` | 仅解释重构前的本地循环 |
-
-源码入口：[Ascend packed 模块](https://github.com/vllm-project/vllm-ascend/blob/870b61a90f299d10728b94080089eb5ab5095c4b/vllm_ascend/distributed/weight_transfer/packed_tensor.py)、[vLLM main packed 模块](https://github.com/vllm-project/vllm/blob/24420b7a341af37a9bc3186e6fc6062512e0aa58/vllm/distributed/weight_transfer/packed_tensor.py)、[vLLM tag packed 模块](https://github.com/vllm-project/vllm/blob/4ba787ec9959e566d3b587a796dff07673324da5/vllm/distributed/weight_transfer/packed_tensor.py)。内部事件和 IPC importer 的描述以固定 main 为准；运行时直接调用安装版本，不复制 main 实现覆盖 tag。
-
-### 1.3 时序对照的读法
-
-第 3、4 章先对照**重构前**的两份实现：vLLM main `24420b7a` 与 [Ascend 历史基线 `37854b83`](https://github.com/vllm-project/vllm-ascend/blob/37854b83ed4c91f90dc609d62d1e90e351005315/vllm_ascend/distributed/weight_transfer/packed_tensor.py)。每个方法分别画出两张时序图，再逐项说明当前 PR `870b61a90` 如何处理差异，最后得出复用结论。HCCL producer 另有一张明确标为“修改后”的图，展开当前适配器的保序过程；前两张旧实现图不包含该适配器。
-
-| 方法 | 时序对照与图后适配说明 |
-| --- | --- |
-| HCCL producer | [3.1 发送主循环](#31-producer主循环委托) |
-| HCCL consumer | [3.2 接收与 owning 回调](#32-consumer字节元数据与独立存储) |
-| IPC producer | [4.2 固定 buffer 与生成器](#42-ipc-producer固定-buffer-与生成器协议) |
-| IPC consumer | [4.3 标识、导入和解包](#43-ipc-consumer标识导入生命周期与解包) |
-
-箭头表示 Python 调用或设备工作提交顺序，不表示每一步设备操作已完成；图中显式 `synchronize` 才是对应 stream 的主机等待。循环表示单侧函数自身的执行，不是两套实现同时运行。HCCL 图展开有 payload 的 chunk，EOF 剩余 chunk 走同一收发步骤；没有剩余 tensor 时跳出，不发空广播。异常只展开与复用边界相关的清理路径。
-
-HCCL 两个方法的结论是“**通过现有参数、回调和 group 接口适配后，直接调用上游主循环**”，不是完全原样使用 NCCL 实现。IPC 的结论是“**当前接口下不能保持现有 NPU 契约并直接委托**”，不是未来不可通过扩展点改造实现复用。
-
-## 2. 复用边界与整体结构
+## 2. 整体结构
 
 ### 2.1 职责分工
 
@@ -67,54 +23,7 @@ HCCL 两个方法的结论是“**通过现有参数、回调和 group 接口适
 | producer 回调校验 | 本地 `_checked_callback` | HCCL 与 IPC 共享 dtype/numel 契约校验 |
 | 默认容量与 slot 数 | 引用上游 `DEFAULT_*` 常量 | 避免重复定义 |
 
-生产改动只落在 `packed_tensor.py`，配套修改其 UT 文件。engine 类继承、group 初始化、RPC、平台 patch 和 V2 utility 文件不在本 PR 的改动范围内。
-
-### 2.2 调用结构
-
-```mermaid
-flowchart TB
-    subgraph ASC["Ascend packed 模块"]
-        P["packed_broadcast_producer"]
-        C["packed_broadcast_consumer"]
-        G["_hccl_group / _HCCLPackedGroup"]
-        M["metadata / owning：字节元数据与 clone-first"]
-        IP["packed_npu_ipc_producer"]
-        IC["packed_npu_ipc_consumer：本地重建与解包"]
-        K["_checked_callback"]
-        D["_drain_packed_streams：异常清理"]
-    end
-    subgraph UP["安装的 vLLM packed 模块"]
-        UP1["packed_nccl_broadcast_producer"]
-        UP2["packed_nccl_broadcast_consumer"]
-        PACK["pack_tensors / PackedChunk"]
-        UNPACK["unpack_tensor：uint8 views"]
-        S["_get_streams"]
-    end
-    W["已有 torch_cuda_wrapper：NPU-only"]
-    H["已有 HCCL communicator"]
-
-    P --> UP1
-    C --> UP2
-    UP1 --> PACK
-    UP2 --> UNPACK
-    C --> M
-    P --> G
-    C --> G
-    G --> S
-    G --> W
-    G --> H
-    G -. "仅异常时" .-> D
-    P --> K
-    IP --> K
-```
-
-图中是调用和适配关系。上游函数名保留 `nccl`，但 `group` 实参是 `_HCCLPackedGroup`，最终调用已有 HCCL communicator，不创建 NCCL communicator。IPC 不调用上游 CUDA IPC producer、consumer 或 importer。
-
-### 2.3 API 适配的作用域
-
-`_hccl_group` 复用既有 `worker/v2/utils.py` 中的 `torch_cuda_wrapper`，将相关 CUDA API 映射到 NPU API。该 wrapper 是进程级重绑定，退出时不恢复，只适用于 NPU-only 进程。
-
-当前实现不重绑定 vLLM 的 `unpack_tensor` 或其他模块函数，也没有全局 owning-unpack hook。`metadata()` 和 `owning()` 都是本次 consumer 调用内的闭包。
+改动只落在 `packed_tensor.py`，配套修改其 UT 文件。engine 类继承、group 初始化、RPC、平台 patch 和 V2 utility 文件不在本 PR 的改动范围内。
 
 ## 3. HCCL 广播路径
 
@@ -202,10 +111,6 @@ sequenceDiagram
 | 在途 tensor 引用 | 上游 `in_flight` 保留 chunk；适配器另登记 slot 通信 buffer 供失败清理 | 不需要 |
 | 无条件本地 finally drain | 上游处理正常 drain，入口 context manager 处理异常 drain/storage 保留 | 不需要 |
 
-两侧都在加入 tensor 后判断累计字节数是否超过阈值，因此 HCCL 的 `buffer_size_bytes` 是分包阈值，不是 IPC 那样的固定容量。上游额外 warning 不会把大 tensor 改为拒绝发送。
-
-**结论：**打包和轮转结构可交给上游；剩余差异可封装在 callback、group 和外层 context manager 中。当前 PR 可直接调用上游 producer 主循环，但不会因此复用 NCCL communicator，也不是与旧实现逐条同步操作完全等价。
-
 #### 修改后：适配器如何承担通信保序
 
 下图是当前 PR `870b61a90` 的调用顺序，不能用它描述上面两份修改前源码。上游 producer 中的 `group.broadcast` 此时实际调用本地 transport，尚未直接调用 native HCCL。
@@ -246,7 +151,7 @@ sequenceDiagram
 
 因此，当前调用链中的 HCCL 跨 slot 通信保序仍在，但由适配器以更保守的完成等待实现；不能据此认为“上游 producer 自带旧版 P4”。原来 B 打包与 A 通信重叠的机会可能减少，尚无性能收益或回退幅度的测量结论。
 
-该结论限于同一次 producer 调用顺序，不保护其他线程/调用并发共享 communicator；前同步也只等待当前 slot，不补齐任意源 tensor 的 caller-stream 依赖。异常清理仍按第 3.3 节处理。
+该结论限于同一次 producer 调用顺序，不保护其他线程/调用并发共享 communicator；前同步也只等待当前 slot，不补齐任意源 tensor 的 caller-stream 依赖。异常时仍由外层 context manager 执行本地 drain 和失败 storage 保留。
 
 #### 修改后：入口职责
 
@@ -334,13 +239,9 @@ sequenceDiagram
 
 **结论：**上游 consumer 已有 `iterator`、`group`、`post_unpack_func` 和 `device` 四个适配入口，足以保留当前的 NPU 分配、HCCL transport、未对齐与独立存储契约。故无需保留旧接收循环，可以直接调用上游主循环；但 clone 的跨 stream 读序/生命周期仍单独处理。
 
-修改后的接收顺序为：`metadata()` 提供等字节数的 uint8 元数据 → 上游分配 NPU buffer → transport 完成 HCCL 前后同步 → 上游记录 raw buffer 的依赖与生命周期信息 → 上游只解 uint8 views → `owning()` clone 后恢复真实 dtype/shape → 调用原 loader 回调。相比旧实现，broadcast 和 callback 都处于上游的 slot stream 上下文内；旧版 broadcast 后的显式等待进入 transport，旧版内联 clone 解包进入 `owning()`。新增 clone 的保护范围仍不等于 raw buffer 的保护范围。
-
-tag v0.33.0 与图示 main 的差异：tag 在每轮开头直接同步 slot stream，没有 main 的 `slot_done` event；两者都有 `prev_received` 与 raw packed buffer 的 `record_stream`。当前 PR 复用安装版本的行为，不向 tag 回填 main 调度。
-
 #### 修改后：元数据与 owning 回调
 
-接收入口显式传入 `device=f"npu:{...}"`。`metadata()` 校验负 shape，按真实 shape 和 dtype 计算字节数，向上游提供一维 uint8 元数据，同时保存真实 shape/dtype 队列。
+接收入口显式传入 `device=f"npu:{...}"`。`metadata()` 增强校验，按真实 shape 和 dtype 计算字节数，向上游提供一维 uint8 元数据，同时保存真实 shape/dtype 队列。
 
 上游负责 chunk 划分、接收、事件与 slot 调度，并通过 `unpack_tensor` 得到 uint8 views。嵌套 `owning()` 随后逐项执行：
 
@@ -348,31 +249,9 @@ tag v0.33.0 与图示 main 的差异：tag 在每轮开头直接同步 slot stre
 uint8 字节 view → clone 独立存储 → view(真实 dtype) → reshape(真实 shape)
 ```
 
-这同时保留独立存储与未对齐混合 dtype 的兼容性。例如 BF16×3 占 6 字节，后续 INT64 的起始偏移不是 8 的倍数；连续切片的 `contiguous()` 不保证新分配，直接 `view(int64)` 可能失败。先 clone 字节再恢复 dtype 可避开原始偏移限制。
-
-`owning` 只表示输出有独立 storage，不表示它已对任意其他 stream 就绪，也不表示 allocator 已跟踪所有异步 reader。相关边界见第 5 章。
-
-### 3.3 native HCCL 同步与异常清理
-
-`_HCCLPackedGroup.broadcast` 先登记当前 slot 的通信 tensor，再同步当前 NPU stream，调用 native HCCL broadcast，最后再次同步。前置同步用于完成 torch_npu 在途工作，后置同步保证 native HCCL 访问完成后再返回上游 tensor 操作。
-
-正常路径由上游结尾 drain 所有 slot，本地不重复执行。异常时 `_drain_packed_streams` 尝试同步每个 slot，不因某个 slot 失败而跳过其余 slot；未能确认完成的非空 buffer 保留在 `_UNSYNCHRONIZED_BUFFERS`，直到进程退出。
-
-该列表只保留引用，不串行化 communicator 或 buffer 的并发访问；失败后重复重试可能持续占用显存。异常优先级规则保留原业务异常，除非清理阶段出现优先级更高的终止信号。
+这同时保留独立存储与未对齐混合 dtype 的兼容性。例如 BF16×3 占 6 字节，后续 INT64 的起始偏移不是 8 的倍数；连续切片的 `contiguous()` 不保证新分配，直接 `view(int64)` 可能失败。先 clone 字节再恢复 dtype 可避开原始偏移限制。 保持`owning` 以用于独立的存储。
 
 ## 4. NPU IPC 路径
-
-### 4.1 当前保留的本地流程
-
-| 环节 | NPU producer | NPU consumer |
-| --- | --- | --- |
-| 共享存储 | 分配固定容量 NPU buffer，通过 `reduce_tensor` 导出一次 handle 参数 | 查找物理 NPU 标识对应的 handle，校验并改写接收端 device index，用 `rebuild_npu_tensor` 重建 |
-| 元数据 | 按源 tensor 保存名称、shape、dtype 和字节数，yield dict | 校验四表长度、dtype、shape、字节数和重建 buffer 容量 |
-| 数据处理 | 回调校验后 contiguous、展平为 uint8 并 copy；单 tensor 超容量时报错 | 截取有效字节，再逐片 clone、恢复 dtype/shape |
-| chunk 边界 | yield 前同步 producer 当前 stream；复用同一共享 buffer | 返回独立存储 tensor；不引入上游 importer 缓存 |
-| 零元素输入 | 非空迭代器即使全是零元素 tensor，也发送元数据；空迭代器不发送 | 保留对应名称、类型和形状 |
-
-producer 当前 stream 的同步只证明当次写入完成。恢复 producer 生成器、复用共享 buffer 之前，接收与加载的完成关系仍依赖现有 engine/trainer 协议；不能把 Python 返回或 RPC 返回本身当作设备完成屏障。
 
 ### 4.2 IPC producer：固定 buffer 与生成器协议
 
