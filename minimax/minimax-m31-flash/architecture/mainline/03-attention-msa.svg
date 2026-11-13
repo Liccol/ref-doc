@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1180" viewBox="0 0 1080 1180" role="img"><title>03-attention-msa</title><rect width="1080" height="1180" fill="white"/><style>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1290" viewBox="0 0 1080 1290" role="img"><title>03-attention-msa</title><rect width="1080" height="1290" fill="white"/><style>
 text{font-family:'Microsoft YaHei','Noto Sans CJK SC',Arial,sans-serif;fill:#22364c}
 .title{font-size:44px;font-weight:700}.head{font-size:31px;font-weight:700}
 .node{font-size:25px;font-weight:600}.body{font-size:24px}.small{font-size:22px}
 .weight{font-size:22px;fill:#59677a}.note{font-size:22px;fill:#59677a}
 </style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
 markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-<path d="M0 0L10 5L0 10Z" fill="#617186"/></marker></defs><rect x="1" y="1" width="1078" height="1178" rx="18" fill="#fbfcfe" stroke="#b9741d" stroke-width="1.7"/>
+<path d="M0 0L10 5L0 10Z" fill="#617186"/></marker></defs><rect x="1" y="1" width="1078" height="1288" rx="18" fill="#fbfcfe" stroke="#b9741d" stroke-width="1.7"/>
 <text x="28" y="49" class="head" text-anchor="start">③ MSA：轻量索引 + 按组稀疏 GQA</text>
 <line x1="28" y1="75" x2="1052" y2="75" stroke="#b9741d" opacity=".35"/>
 <rect x="100" y="110" width="880" height="102" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
@@ -25,7 +25,7 @@ markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 <text data-max-width="432" x="810.0" y="690" class="body" text-anchor="middle">独立 index Q/K，4 个索引头</text>
 <text data-max-width="432" x="810.0" y="725" class="body" text-anchor="middle">为历史块打分：块内取 max</text>
 <rect x="580" y="430" width="460" height="137" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="432" x="810.0" y="465" class="node" text-anchor="middle">Group-wise Block Top-K</text>
+<text data-max-width="432" x="810.0" y="465" class="node" text-anchor="middle">按组、按块 Top-K</text>
 <text data-max-width="432" x="810.0" y="500" class="body" text-anchor="middle">每个 GQA 组独立选 Top-16 块</text>
 <text data-max-width="432" x="810.0" y="535" class="body" text-anchor="middle">每块 128 token；强制包含 local</text>
 <polyline points="800,620 800,567" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
@@ -35,7 +35,9 @@ markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 <text data-max-width="592" x="540.0" y="935" class="node" text-anchor="middle">输入 H [N,6144]</text>
 <polyline points="540,900 540,850 280,850 280,757" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
 <polyline points="540,850 800,850 800,757" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<rect x="40" y="1010" width="1000" height="137" rx="10" fill="#f3f6fa" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="972" x="540.0" y="1045" class="node" text-anchor="middle">MiniMax 特点：先检索重要块，再计算主注意力。</text>
-<text data-max-width="972" x="540.0" y="1080" class="body" text-anchor="middle">独立索引分支；4 组可选不同块，local 占 Top-16 预算。</text>
-<text data-max-width="972" x="540.0" y="1115" class="body" text-anchor="middle">稀疏的是主 attention 的读算范围，不是删除完整历史。</text></svg>
+<rect x="40" y="1010" width="1000" height="247" rx="10" fill="#f3f6fa" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="972" x="540.0" y="1045" class="node" text-anchor="middle">与 DSA（DeepSeek-V3.2）的关键区别</text>
+<text data-max-width="972" x="540.0" y="1080" class="body" text-anchor="middle">DSA：按 token 选；同一 query 的各 Q heads 共享选点。</text>
+<text data-max-width="972" x="540.0" y="1115" class="body" text-anchor="middle">MSA：按 block 选；每个 GQA 组独立选块。</text>
+<text data-max-width="972" x="540.0" y="1150" class="body" text-anchor="middle">索引评分：DSA 多头 ReLU 加权聚合；MSA 块内 max。</text>
+<text data-max-width="972" x="540.0" y="1185" class="body" text-anchor="middle">两者都有 Indexer；“按块 + 按组”才是这里要突出的区别。</text></svg>

@@ -73,20 +73,20 @@ p.text(50,177,'层内沿最后 6144 维计算；主 Q/K 和 index Q/K 则每 hea
 norm=p
 
 # MSA is intentionally a small conceptual inset, drawn bottom-to-top directly.
-p=Plate('03-attention-msa',1080,1180,'③ MSA：轻量索引 + 按组稀疏 GQA','orange')
+p=Plate('03-attention-msa',1080,1290,'③ MSA：轻量索引 + 按组稀疏 GQA','orange')
 p.box(100,110,880,['O Projection','[N,8192] → [N,6144]'],102)
 p.box(100,265,880,['Block-Sparse GQA','主 Q/K/V 只在选中的历史块上计算 attention','64 个 Q heads / 4 个 KV heads'],137)
 p.arrow([(540,265),(540,212)])
 p.box(40,620,480,['主 Q / K / V Projection','Q [N,64,128]','K/V 各 [N,4,128]'],137)
 p.box(580,620,460,['轻量 Indexer','独立 index Q/K，4 个索引头','为历史块打分：块内取 max'],137)
-p.box(580,430,460,['Group-wise Block Top-K','每个 GQA 组独立选 Top-16 块','每块 128 token；强制包含 local'],137)
+p.box(580,430,460,['按组、按块 Top-K','每个 GQA 组独立选 Top-16 块','每块 128 token；强制包含 local'],137)
 p.arrow([(800,620),(800,567)])
 p.arrow([(800,430),(800,402)])
 p.arrow([(280,620),(280,402)])
 p.box(230,900,620,['输入 H [N,6144]'],68)
 p.arrow([(540,900),(540,850),(280,850),(280,757)])
 p.arrow([(540,850),(800,850),(800,757)])
-p.box(40,1010,1000,['MiniMax 特点：先检索重要块，再计算主注意力。','独立索引分支；4 组可选不同块，local 占 Top-16 预算。','稀疏的是主 attention 的读算范围，不是删除完整历史。'],137,'#f3f6fa')
+p.box(40,1010,1000,['与 DSA（DeepSeek-V3.2）的关键区别','DSA：按 token 选；同一 query 的各 Q heads 共享选点。','MSA：按 block 选；每个 GQA 组独立选块。','索引评分：DSA 多头 ReLU 加权聚合；MSA 块内 max。','两者都有 Indexer；“按块 + 按组”才是这里要突出的区别。'],247,'#f3f6fa')
 msa=p
 
 p=Plate('04-dense-ffn',900,650,'④ Dense FFN：每 token 用同一套本层参数','green')
@@ -101,27 +101,23 @@ p.down(450,502,540)
 p.box(155,540,590,['Down Linear → [N,6144]'],68)
 dense=p
 
-p=Plate('05-moe',900,1280,'⑤ MoE：路由专家 + 无条件共享专家','green')
-p.box(230,105,440,['同一份 Z [N,6144]'],68)
-p.arrow([(450,173),(450,205),(235,205),(235,240)])
-p.arrow([(450,205),(680,205),(680,240)])
-p.box(35,240,400,['Router Linear → sigmoid','128 维得分，加 bias 选 Top-4','IDs / weights 各 [N,4]'],137)
-p.box(485,240,380,['Shared Expert','每个 token 都参与','不占 Top-4 名额'],137,COLORS['teal'][1])
-p.down(235,377,420)
-p.box(35,420,400,['Dispatch → 选中的 4 个专家','按 expert ID 分组计算','共 4N 条 token-expert 任务'],137)
-p.down(235,557,600)
-p.box(35,600,400,['Expert FFN','gate/up → SwiGLUOAI → down','6144 → 3072 → 6144'],137)
-p.arrow([(680,377),(680,600)])
-p.box(485,600,380,['Shared FFN','gate/up → 激活 → down','6144 → 3072 → 6144'],137,COLORS['teal'][1])
-p.down(235,737,780)
-p.box(35,780,400,['Combine：回收 + 加权求和','R=2.0 × Σ rₖ·Expertₖ(Z)','r 取原始 sigmoid 分数归一化'],137)
-p.add(450,970)
-p.arrow([(235,917),(235,970),(430,970)])
-p.arrow([(680,737),(680,970),(470,970)])
-p.down(450,990,1030)
-p.box(130,1030,640,['F=R+Shared(Z) → [N,6144]'],68)
-p.text(450,1160,'语言和视觉 token 均走两条分支。','small','middle')
-p.text(450,1205,'Dense / MoE 的区别在 FFN；二者的 Attention 都是 MSA。','small','middle')
+# The reference-style MoE inset retains only Router, MLPs and weighted fusion.
+p=Plate('05-moe',900,900,'⑤ MoE：Router → MLP → 加权汇合','green')
+p.box(130,105,640,['路由加权和 + Shared → [N,6144]'],68)
+p.add(450,220)
+p.arrow([(450,200),(450,173)])
+p.box(35,270,400,['Routed MLP ×128','每 token 选择其中 Top-4'],102)
+p.box(485,270,380,['Shared MLP ×1','每 token 无条件参与'],102,COLORS['teal'][1])
+p.arrow([(235,270),(235,220),(430,220)])
+p.text(235,200,'Σ rₖ·MLPₖ ×2.0','small','middle')
+p.arrow([(680,270),(680,220),(470,220)])
+p.box(35,480,400,['Router','sigmoid + bias → Top-4'],102)
+p.arrow([(235,480),(235,372)])
+p.box(230,700,440,['输入 Z [N,6144]'],68)
+p.arrow([(450,700),(450,660),(235,660),(235,582)])
+p.arrow([(450,660),(680,660),(680,372)])
+p.text(450,825,'r：原始 sigmoid 分数在选中专家内归一化。','small','middle')
+p.text(450,865,'共享专家绕过 Router，不占 Top-4，不乘路由缩放。','small','middle')
 moe=p
 
 def bottom_up(plate, low, high):
@@ -167,7 +163,6 @@ def bottom_up(plate, low, high):
 
 bottom_up(spine,100,2798)
 bottom_up(dense,105,608)
-bottom_up(moe,105,1098)
 
 # One path on the left, explanatory insets on the right. Dashed = magnification.
 placements=[(spine,60,150),(vision,1220,2520),(norm,1220,2220),
