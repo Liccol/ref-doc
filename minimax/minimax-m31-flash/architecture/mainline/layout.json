@@ -1,6 +1,6 @@
 {
   "width": 3400,
-  "height": 3260,
+  "height": 5000,
   "plates": [
     {
       "name": "main-path",
@@ -43,6 +43,15 @@
       "y": 170,
       "width": 900,
       "height": 900
+    }
+  ],
+  "appendices": [
+    {
+      "name": "msa-vs-dsa",
+      "x": 300,
+      "y": 3320,
+      "width": 2800,
+      "height": 1610
     }
   ]
 }

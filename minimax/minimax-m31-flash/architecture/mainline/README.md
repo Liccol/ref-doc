@@ -1,6 +1,6 @@
 # MiniMax-M3.1-Flash：一条主线与关键模块展开
 
-[完整高清 PNG 5100×4890](../minimax-m31-detailed-architecture.png) · [可编辑 SVG](../minimax-m31-detailed-architecture.svg) · [完整 shape / 数值流转详解](../../model_analyze.md)
+[完整高清 PNG 5100×7500](../minimax-m31-detailed-architecture.png) · [可编辑 SVG](../minimax-m31-detailed-architecture.svg) · [完整 shape / 数值流转详解](../../model_analyze.md)
 
 ![主线及模块放大图](preview.png)
 
@@ -21,9 +21,9 @@
 
 MSA 小图改为参考 [MSA 论文 Figure 1](https://arxiv.org/html/2606.13392v2#S0.F1)重新绘制的可编辑结构图，保留其左右双分支和按组 mask 的表达：Index Branch 经 Linear Projection、Norm/RoPE、index Q/K、Index Score、Block Max Pooling 产生块索引；索引连接 Main Branch 的 Top-K KV Blocks，再由主 Q/K/V 执行 Sparse Attention。V 绕过 Norm/RoPE，主 Q 绕过 KV 选择直接进入 attention。
 
-为接回本图的语言层，顶部补充 O Projection。底部标注本模型实际配置：4 个 GQA 组、block=128、Top-16 / 组及强制 local。mask 仅展示两个组如何产生不同选块的教学示意，不代表模型只有两组，也不是实测 attention mask。完整 shape 与缓存过程见[文字详解](../../model_analyze.md)和[扩展 MSA 图](../detailed/04-msa.png)。
+为接回本图的语言层，顶部补充 O Projection。底部标注本模型实际配置：4 个 GQA 组、block=128、Top-16 / 组及强制 local。mask 仅展示两个组如何产生不同选块的教学示意，不代表模型只有两组，也不是实测 attention mask。完整 shape 与缓存过程见[文字详解](../../model_analyze.md)。
 
-以下补充对比中的 DSA 特指 DeepSeek-V3.2 的 DeepSeek Sparse Attention。DSA 对照文字移出 MSA 小图，仅在文档保留。两者都有 Indexer；“先选再算”并非 MSA 独有，真正要区分的是按块选取与按 GQA 组独立选择：
+以下补充对比中的 DSA 特指 DeepSeek-V3.2 的 DeepSeek Sparse Attention。大图底部附有[独立 Index Branch 对照图](../msa-vs-dsa.md)，仅比较索引分支，不展开后续主注意力。两者都有 Indexer；“先选再算”并非 MSA 独有，真正要区分的是按块选取与按 GQA 组独立选择：
 
 | 项目 | DSA（DeepSeek-V3.2） | MSA（本图的 M3.1） |
 | --- | --- | --- |

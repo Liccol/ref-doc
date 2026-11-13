@@ -1,6 +1,7 @@
 """One primary model path with connected module insets. Run with --png."""
 
 import json
+import runpy
 from pathlib import Path
 from diagram_primitives import Plate, STYLE, COLORS
 
@@ -9,7 +10,7 @@ OUT=ROOT/'mainline'
 OUT.mkdir(exist_ok=True)
 cfg=json.loads((ROOT/'sources/config.json').read_text(encoding='utf-8'))['text_config']
 assert cfg['num_hidden_layers']==60 and sum(cfg['moe_layer_freq'])==57
-W,H=3400,3260
+W,H=3400,5000
 
 # The one dominant path. Only module names belong inside its decoder blocks.
 p=Plate('main-path',1080,3020,'主线：输入 → 多模态合并 → 60 层 → 输出','purple')
@@ -220,10 +221,15 @@ zoom([(860,1289),(1090,1289),(1090,1475),(2200,1475)])
 zoom([(860,1784),(1220,1784)])                # Dense FFN → dense inset
 zoom([(860,994),(1220,994)])                  # MoE → routed/shared inset
 full.append('<text x="60" y="3205" class="note">逻辑 shape，未切 TP/EP；W=[out,in]。GemmaRMSNorm / MSA / SwiGLU-OAI 均按 M3.1 配置与本地适配实现解释，非实际运行 trace。</text>')
+comparison=runpy.run_path(str(ROOT/'draw_attention_comparison.py'))
+comparison_svg=(ROOT/'msa-vs-dsa.svg').read_text(encoding='utf-8')
+comparison_svg=comparison_svg.replace('<svg ', '<svg x="300" y="3320" ',1)
+comparison_svg=comparison_svg.replace('id="arrow"','id="comparison-arrow"').replace('url(#arrow)','url(#comparison-arrow)')
+full.append(comparison_svg)
 full.append('</svg>')
 (ROOT/'minimax-m31-detailed-architecture.svg').write_text('\n'.join(full),encoding='utf-8')
 for plate,_,_ in placements:(OUT/(plate.name+'.svg')).write_text(plate.render(),encoding='utf-8')
-(OUT/'layout.json').write_text(json.dumps({'width':W,'height':H,'plates':[{'name':p.name,'x':x,'y':y,'width':p.w,'height':p.h} for p,x,y in placements]},indent=2)+'\n',encoding='utf-8')
+(OUT/'layout.json').write_text(json.dumps({'width':W,'height':H,'plates':[{'name':p.name,'x':x,'y':y,'width':p.w,'height':p.h} for p,x,y in placements],'appendices':[{'name':'msa-vs-dsa','x':300,'y':3320,'width':2800,'height':1610}]},indent=2)+'\n',encoding='utf-8')
 
 def render_png():
     import html,os,re,subprocess,tempfile
@@ -243,11 +249,11 @@ def render_png():
         assert report,'No browser layout report'
         assert not json.loads(html.unescape(report.group(1))),report.group(1)
     image=Image.open(ROOT/'minimax-m31-detailed-architecture.png')
-    assert image.size==(5100,4890),image.size
+    assert image.size==(round(W*1.5),round(H*1.5)),image.size
     for plate,x,y in placements:
         image.crop(tuple(round(v*1.5) for v in (x,y,x+plate.w,y+plate.h))).save(OUT/(plate.name+'.png'))
-    image.resize((1700,1630)).save(OUT/'preview.png')
-    print('Mainline PNG 5100x4890; all inset text fits.')
+    image.resize((1700,2500)).save(OUT/'preview.png')
+    print(f'Mainline PNG {image.width}x{image.height}; all inset text fits.')
 
 if __name__=='__main__':
     import sys

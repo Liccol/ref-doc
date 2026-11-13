@@ -4,17 +4,16 @@
 
 ## 入口
 
-- [主线架构图：输入到输出及模块展开](architecture/minimax-m31-detailed-architecture.png) · [可编辑 SVG](architecture/minimax-m31-detailed-architecture.svg) · [主线与模块小图](architecture/mainline/README.md)。一条主线贯穿 Tokenizer、Embedding/视觉塔合并、前 3 层、后 57 层和输出，虚线连接关键模块说明。
+- [主线架构图：输入到输出及模块展开](architecture/minimax-m31-detailed-architecture.png) · [可编辑 SVG](architecture/minimax-m31-detailed-architecture.svg) · [主线与模块小图](architecture/mainline/README.md)。一条主线贯穿 Tokenizer、Embedding/视觉塔合并、前 3 层、后 57 层和输出，虚线连接关键模块说明，底部附 MSA / DSA 的 Index Branch 对照。
 - [模型结构说明与完整参数表](architecture/README.md)：主干、MSA/indexer、残差、专家及视觉融合。
 - [逐步张量 shape 与数值流转详解](model_analyze.md)：输入接口、QKV/indexer、MoE 分发回收、prefill/decode 算例、视觉 patch、KV 分页、TP/EP 与量化存储；附固定版本配置和官方权重 header 抽样。
-- [高清模型图 4800×5560](architecture/minimax-m31-full-architecture.png) · [可编辑 SVG](architecture/minimax-m31-full-architecture.svg)。
 - [全层测试：服务启动、测试命令、结果及边界](full/README.md)。
 - [验证详单：逐轮比较、显存与失败诊断](full/VALIDATION_DETAILS.md)。
 - [减层 RL：当前证据状态和补验清单](reduced/README.md)。
 - [历史自动化命令（凭据已脱敏）](full/commands/historical-commands.txt)。
 - [归档校验清单](SHA256SUMS) · [检查记录](validation.json)。
 
-![模型结构](architecture/minimax-m31-full-architecture.png)
+![模型结构](architecture/mainline/preview.png)
 
 ## 当前结果
 

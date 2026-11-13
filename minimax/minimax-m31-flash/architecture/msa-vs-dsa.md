@@ -2,6 +2,8 @@
 
 [高清 PNG 4200×2415](msa-vs-dsa.png) · [可编辑 SVG](msa-vs-dsa.svg) · [绘图源码](draw_attention_comparison.py)
 
+本图也已收录在[完整架构图](minimax-m31-detailed-architecture.png)最下方。
+
 ![Index Branch 评分与选择](msa-vs-dsa-preview.png)
 
 本图仅比较独立索引分支，自下向上展示：输入 → 索引投影 → 评分 → Top-K → 索引输出。不展开后续主注意力的结构。
