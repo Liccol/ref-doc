@@ -35,7 +35,7 @@ def decoder(top,title,ffn,label):
     for y1,y2 in [(top+70,top+90),(top+158,top+215),(top+283,top+325),(top+365,top+385),(top+453,top+510),(top+578,top+630)]:p.down(540,y1,y2)
     p.add(540,top+345);p.add(540,top+650)
     p.arrow([(540,top+70),(225,top+70),(225,top+345),(520,top+345)])
-    p.arrow([(540,top+365),(855,top+365),(855,top+650),(560,top+650)])
+    p.arrow([(540,top+365),(255,top+365),(255,top+650),(520,top+650)])
     p.down(540,top+670,top+730)
 
 decoder(720,'前三层：层 0–2，重复 ×3','Dense FFN','④')
@@ -69,26 +69,21 @@ p.text(50,125,'y = x / sqrt(mean(x²) + ε) × (1+w)；ε=10⁻⁶；不减均�
 p.text(50,177,'层内沿最后 6144 维计算；主 Q/K 和 index Q/K 则每 head 沿 128 维计算，权重各自独立。','body')
 norm=p
 
-p=Plate('03-attention-msa',1080,1450,'③ Attention：MSA 双分支选块与计算','orange')
-p.box(230,110,620,['输入 H [N,6144]'],68)
-p.arrow([(540,178),(540,215),(280,215),(280,250)])
-p.arrow([(540,215),(800,215),(800,250)])
-p.box(40,250,480,['主 Q / K / V Linear','Q [N,64,128]','K/V 各 [N,4,128]'],137)
-p.box(580,250,460,['index Q / K Linear','iQ [N,4,128]','iK [N,1,128]'],137)
-p.down(280,387,430);p.down(800,387,430)
-p.box(40,430,480,['Q/K Norm + Partial RoPE','每头前 64 维旋转','V 保持原值'],137)
-p.box(580,430,460,['iQ/iK Norm + Partial RoPE','位置编码后参与索引打分','iK 按请求写入缓存'],137)
-p.down(800,567,610)
-p.box(580,610,460,['Index Score → Block Top-K','块内点积取 max，再选 Top-16','block=128；强制 local=1'],137)
-p.box(40,650,480,['主 K/V 缓存','新 K/V 写入；Q 不缓存','旧历史保留，按所选块读取'],137,COLORS['red'][1])
-p.arrow([(280,567),(280,650)])
-p.box(100,860,880,['选中历史块 → 主 GQA Attention','QKᵀ / √128 → causal mask → softmax → V','64 Q heads : 4 KV heads；每组 16 个 Q heads'],137)
-p.arrow([(800,747),(800,860)]);p.arrow([(280,787),(280,860)])
-# The current Q bypasses the cache, making its data path explicit.
-p.arrow([(40,498),(20,498),(20,930),(100,930)])
-p.down(540,997,1040)
-p.box(100,1040,880,['合并 heads → O Linear','[N,8192] → [N,6144]'],102)
-p.box(40,1200,1000,['MSA 的关键：先找块，再在选中范围内精算注意力。','4 个 KV 组可选不同块；local 块占 Top-16 预算。','稀疏的是主注意力读取范围，不是直接删除未选缓存。'],137,'#f3f6fa')
+# MSA is intentionally a small conceptual inset, drawn bottom-to-top directly.
+p=Plate('03-attention-msa',1080,1180,'③ MSA：轻量索引 + 按组稀疏 GQA','orange')
+p.box(100,110,880,['O Projection','[N,8192] → [N,6144]'],102)
+p.box(100,265,880,['Block-Sparse GQA','主 Q/K/V 只在选中的历史块上计算 attention','64 个 Q heads / 4 个 KV heads'],137)
+p.arrow([(540,265),(540,212)])
+p.box(40,620,480,['主 Q / K / V Projection','Q [N,64,128]','K/V 各 [N,4,128]'],137)
+p.box(580,620,460,['轻量 Indexer','独立 index Q/K，4 个索引头','为历史块打分：块内取 max'],137)
+p.box(580,430,460,['Group-wise Block Top-K','每个 GQA 组独立选 Top-16 块','每块 128 token；强制包含 local'],137)
+p.arrow([(800,620),(800,567)])
+p.arrow([(800,430),(800,402)])
+p.arrow([(280,620),(280,402)])
+p.box(230,900,620,['输入 H [N,6144]'],68)
+p.arrow([(540,900),(540,850),(280,850),(280,757)])
+p.arrow([(540,850),(800,850),(800,757)])
+p.box(40,1010,1000,['MiniMax 特点：先检索重要块，再计算主注意力。','独立索引分支；4 组可选不同块，local 占 Top-16 预算。','稀疏的是主 attention 的读算范围，不是删除完整历史。'],137,'#f3f6fa')
 msa=p
 
 p=Plate('04-dense-ffn',900,650,'④ Dense FFN：每 token 用同一套本层参数','green')
@@ -169,7 +164,6 @@ def bottom_up(plate, low, high):
 
 bottom_up(spine,100,2798)
 bottom_up(dense,105,608)
-bottom_up(msa,110,1142)
 bottom_up(moe,105,1098)
 
 # One path on the left, explanatory insets on the right. Dashed = magnification.
