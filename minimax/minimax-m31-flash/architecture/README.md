@@ -6,13 +6,13 @@ MiniMax-M3.1-Flash 是包含视觉编码器的自回归 MoE 语言模型。文�
 
 [完整高清 PNG（5100×7500）](minimax-m31-detailed-architecture.png) · [可编辑 SVG](minimax-m31-detailed-architecture.svg) · [主线与五张模块小图](mainline/README.md) · [绘图源码](draw_mainline.py)
 
-[独立图：MSA 与 DSA 的 Index Branch 对照](msa-vs-dsa.md)：只展示索引投影、评分、Top-K 和索引输出，比较 token 与 block 的选择粒度，不展开后续主注意力；同图已放在大图最下方。
+[独立图：MSA Index Branch 详解](msa-index-branch.md)：索引 Q/K 投影、独立缓存、逐组评分、块内 max、Top-K 与 local 预算；同图已放在大图最下方。
 
 ![单一主线及关键模块小图](mainline/preview.png)
 
 参考 [InfraTech MiniMax-M2.5 图](https://github.com/CalvinXKY/InfraTech/blob/main/models/minimax_m_2_5/minimax_m_2_5_architecture.jpg)的主线与模块放大布局，重新绘制 M3.1：左侧端到端链路**从下向上**阅读，底部输入经文本分词/Embedding 与视觉预处理/视觉塔两路合并；随后向上连续通过前三层、后 57 层、最终归一化和输出。重复层框内只列 GemmaRMSNorm、Attention、Dense FFN / MoE 与残差；虚线连接右侧五张模块小图。右侧纵向计算也统一向上，视觉横向小图仍向右。参考图仅作为布局参考，模型参数与模块按 M3.1 配置和本地适配实现核验。
 
-完整 shape、数值流转和实现位置见[文字详解](../model_analyze.md)。目录只保留当前主线图、模块小图和 Index Branch 对照图。
+完整 shape、数值流转和实现位置见[文字详解](../model_analyze.md)。目录只保留当前主线图、模块小图和 Index Branch 详解图。
 
 ## 配合结构图阅读张量变化
 
@@ -103,4 +103,4 @@ Dense FFN 与专家使用两路 gate/up 投影、SwiGLUOAI 门控组合和 down 
 
 - [官方模型卡片](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash)
 - [布局参考：InfraTech Kimi K3](https://github.com/CalvinXKY/InfraTech/tree/main/models/kimi_k_3)。仅借鉴主干/侧面展开布局，不复用 Kimi 的模型参数或架构模块。
-- `python -B draw_mainline.py --png` 重建主线 SVG、高清 PNG 和模块小图，并自动将 Index Branch 对照图加入底部。PNG 为 5100×7500；需要 Chrome/Edge 和 Pillow。SVG 内文字保持可编辑。
+- `python -B draw_mainline.py --png` 重建主线 SVG、高清 PNG 和模块小图，并自动将 Index Branch 详解图加入底部。PNG 为 5100×7500；需要 Chrome/Edge 和 Pillow。SVG 内文字保持可编辑。

@@ -23,16 +23,7 @@ MSA 小图改为参考 [MSA 论文 Figure 1](https://arxiv.org/html/2606.13392v2
 
 为接回本图的语言层，顶部补充 O Projection。底部标注本模型实际配置：4 个 GQA 组、block=128、Top-16 / 组及强制 local。mask 仅展示两个组如何产生不同选块的教学示意，不代表模型只有两组，也不是实测 attention mask。完整 shape 与缓存过程见[文字详解](../../model_analyze.md)。
 
-以下补充对比中的 DSA 特指 DeepSeek-V3.2 的 DeepSeek Sparse Attention。大图底部附有[独立 Index Branch 对照图](../msa-vs-dsa.md)，仅比较索引分支，不展开后续主注意力。两者都有 Indexer；“先选再算”并非 MSA 独有，真正要区分的是按块选取与按 GQA 组独立选择：
-
-| 项目 | DSA（DeepSeek-V3.2） | MSA（本图的 M3.1） |
-| --- | --- | --- |
-| 选择粒度 | 单个历史 token | 128-token block |
-| 选取结果共享范围 | 同一 query 的所有 Q heads 共用一组 token 索引 | 每个 GQA 组独立选择块；组内 Q heads 共用 |
-| 索引评分 | 多个索引头的 ReLU 点积，经 query 相关权重聚合为 token 分数 | 每组 index Q 与 index K 点积，再对块内位置取 max |
-| 主注意力搭配 | V3.2 基于 MLA 的 MQA 模式 | GQA，64 个 Q heads 对应 4 个 KV heads |
-
-依据：[MSA 论文第 6 节对 DSA 的直接比较](https://arxiv.org/html/2606.13392v2#S6)、[DeepSeek-V3.2 第 2.1 节及式 1](https://arxiv.org/html/2512.02556v1#S2.SS1)。本图的 Top-16、128 和 4 组取自固定 M3.1 配置。按块选取便于连续 KV 读取，但即使候选数量相同，也不等同于选出相同数量的最佳单个 token，不能仅凭示意图判断哪种实现更快。
+大图底部单独展开 [MSA Index Branch](../msa-index-branch.md)：独立 Q/K 投影与 Norm/RoPE → 写入 Index K Cache → 逐组 token 点积 → 每 128 个位置取块内 max → 各组 Top-16（包含强制 local）→ 块索引。普通因果 GQA 读取全部可见历史 K/V；MSA 主分支根据索引只读取选中块。小图不展开主注意力的头共享细节。
 
 MoE 小图沿用参考图的 Router → MLP → 加权汇合组织方式，去掉 dispatch/combine 等实现节点；参数按 M3.1 改为 128 个路由 MLP、每 token 选择 4 个，并额外保留每 token 都参与的 1 个共享 MLP。共享 MLP 绕过 Router，其输出不乘路由缩放系数。专家内部的 gate/up、激活、down 仍见文字详解。
 

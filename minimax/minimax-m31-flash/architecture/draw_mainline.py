@@ -221,15 +221,15 @@ zoom([(860,1289),(1090,1289),(1090,1475),(2200,1475)])
 zoom([(860,1784),(1220,1784)])                # Dense FFN → dense inset
 zoom([(860,994),(1220,994)])                  # MoE → routed/shared inset
 full.append('<text x="60" y="3205" class="note">逻辑 shape，未切 TP/EP；W=[out,in]。GemmaRMSNorm / MSA / SwiGLU-OAI 均按 M3.1 配置与本地适配实现解释，非实际运行 trace。</text>')
-comparison=runpy.run_path(str(ROOT/'draw_attention_comparison.py'))
-comparison_svg=(ROOT/'msa-vs-dsa.svg').read_text(encoding='utf-8')
-comparison_svg=comparison_svg.replace('<svg ', '<svg x="300" y="3320" ',1)
-comparison_svg=comparison_svg.replace('id="arrow"','id="comparison-arrow"').replace('url(#arrow)','url(#comparison-arrow)')
-full.append(comparison_svg)
+runpy.run_path(str(ROOT/'draw_msa_index.py'))
+index_svg=(ROOT/'msa-index-branch.svg').read_text(encoding='utf-8')
+index_svg=index_svg.replace('<svg ', '<svg x="300" y="3320" ',1)
+index_svg=index_svg.replace('id="arrow"','id="index-arrow"').replace('url(#arrow)','url(#index-arrow)')
+full.append(index_svg)
 full.append('</svg>')
 (ROOT/'minimax-m31-detailed-architecture.svg').write_text('\n'.join(full),encoding='utf-8')
 for plate,_,_ in placements:(OUT/(plate.name+'.svg')).write_text(plate.render(),encoding='utf-8')
-(OUT/'layout.json').write_text(json.dumps({'width':W,'height':H,'plates':[{'name':p.name,'x':x,'y':y,'width':p.w,'height':p.h} for p,x,y in placements],'appendices':[{'name':'msa-vs-dsa','x':300,'y':3320,'width':2800,'height':1610}]},indent=2)+'\n',encoding='utf-8')
+(OUT/'layout.json').write_text(json.dumps({'width':W,'height':H,'plates':[{'name':p.name,'x':x,'y':y,'width':p.w,'height':p.h} for p,x,y in placements],'appendices':[{'name':'msa-index-branch','x':300,'y':3320,'width':2800,'height':1610}]},indent=2)+'\n',encoding='utf-8')
 
 def render_png():
     import html,os,re,subprocess,tempfile

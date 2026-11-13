@@ -8,7 +8,7 @@
 
 当前首选图为[单一主线 + 模块展开](architecture/mainline/README.md)：左侧贯穿输入、Tokenizer、Embedding/视觉塔合并、前 3 层、后 57 层及输出，右侧五张小图由对应关键模块引出；以下大分区图作为扩展资料保留。
 
-2026-11-13 图解修订：参见[当前主线与关键模块图](architecture/minimax-m31-detailed-architecture.png)及[模块小图](architecture/mainline/README.md)，底部附 [Index Branch 对照](architecture/msa-vs-dsa.md)。视觉塔先生成同宽视觉向量，再按占位位置与语言向量合成同一序列；进入 MoE 后，两类位置都同时进入 router 和共享分支，不按模态固定分路。
+2026-11-13 图解修订：参见[当前主线与关键模块图](architecture/minimax-m31-detailed-architecture.png)及[模块小图](architecture/mainline/README.md)，底部附 [Index Branch 详解](architecture/msa-index-branch.md)。视觉塔先生成同宽视觉向量，再按占位位置与语言向量合成同一序列；进入 MoE 后，两类位置都同时进入 router 和共享分支，不按模态固定分路。
 
 先区分三个对象：**模型参数**是训练得到的权重，推理时通常保持数值和 shape 不变；**激活张量**是输入经过每步运算得到的中间值；**运行时状态**包括 KV cache、位置、块表和路由索引，会随请求推进而更新。下文所谓“轮转”主要指后两者的数据流与状态变化。
 
