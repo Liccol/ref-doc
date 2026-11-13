@@ -4,11 +4,11 @@ MiniMax-M3.1-Flash 是包含视觉编码器的自回归 MoE 语言模型。文�
 
 ## 详细版：全层级、入参、Shape 与内部流转
 
-[完整高清 PNG（5400×7890）](minimax-m31-detailed-architecture.png) · [可编辑 SVG，可无限放大](minimax-m31-detailed-architecture.svg) · [六张分区图逐一阅读](detailed/README.md) · [详细版绘图源码](draw_detailed.py)
+[完整高清 PNG（5400×11805）](minimax-m31-detailed-architecture.png) · [可编辑 SVG，可无限放大](minimax-m31-detailed-architecture.svg) · [七张分区图逐一阅读](detailed/README.md) · [详细版绘图源码](draw_detailed.py) · [整体与两类层布局](detailed_sections.py)
 
 ![详细架构图预览：入参、MSA、主干残差、FFN、视觉与缓存时序](detailed/overview-preview.png)
 
-详细版沿用原图的主干与两侧展开布局，同构层只展开一层并标明范围：文本层 0–2 的 Dense、层 3–59 的 MoE、全 60 层共用的 MSA 结构，以及视觉 32 层的 Transformer。每层权重与缓存内容各自独立。图中列出激活 shape、Linear 权重 shape、残差、路由分发/回收、视觉替换和连续 decode 的状态变化。原始总览图保留如下。
+2026-11-13 版先讲整体执行顺序，再分别展开前 3 层、后 57 层、MSA 及独立视觉塔。同构层只展开一次，各层权重与缓存内容独立。语言与视觉向量合并后一起进入主干；MoE 图明确画出路由分支、共享分支及两次汇合。MSA 增加四组历史块的 Top-16 选取示意，并将“稀疏 attention”与“专家稀疏 FFN”区分。原始总览图保留如下。
 
 ## 整体架构
 

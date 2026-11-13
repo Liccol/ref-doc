@@ -81,22 +81,9 @@ class Plate:
                 f'<rect width="{self.w}" height="{self.h}" fill="white"/>{STYLE}{body}</svg>')
 
 
-# Input contract across the whole model, above the repeated decoder plate.
-p = Plate("01-inputs", 3480, 490, "01 入参 → Embedding → 多模态序列：先分清 ID、位置、像素与缓存元数据", "blue")
-p.box(40, 110, 760, ["文本输入", "input_ids [B,S] / 打包 [N]，整数", "positions [N]：Pᵢ … Pᵢ+Sᵢ−1", "mask / seq_lens / 请求边界"], 172)
-p.box(910, 110, 760, ["Embedding 查表", "W_E [200064,6144]", "IDs → X_text [N,6144]", ("查表取行；权重在推理中保持不变", "weight")], 172)
-p.box(1780, 110, 760, ["视觉输入 → 视觉塔（见 06）", "pixel_values [Nv,1176]；1176=3×2×14²", "grid_thw [图像/视频数,3]", "→ V_mm [Nv/4,6144]"], 172)
-p.box(2650, 110, 790, ["对应占位位置替换", "image ID=200025 / video ID=200026", "X [N,6144] → 语言主干（见 03）", ("视觉向量数必须等于展开后的占位数", "weight")], 172)
-p.arrow([(800, 196), (910, 196)])
-p.arrow([(1670, 196), (1720, 196), (1720, 320), (3045, 320), (3045, 282)])
-p.arrow([(2540, 196), (2650, 196)])
-p.box(40, 353, 1630, ["符号：N=ΣSᵢ 为本轮有效 token 数；Pᵢ 为已有历史；Tᵢ=Pᵢ+Sᵢ", "Nv=merge 前的视觉 patch 数；矩形示例 N=B×S；下图默认不切 TP/EP"], 103, "#f3f6fa")
-p.box(1780, 353, 1660, ["slot_mapping [N] → 新 K/V 的写入槽；block_table [B,Mcache] → 历史地址", "本轮激活与逐层 KV cache 独立；物理分页布局由后端决定（见 07）"], 103, "#f3f6fa")
-inputs = p
-
 # MSA plate: explicit independent projections and cached/indexed paths.
-p = Plate("02-msa", 1120, 1940, "02 MSA：所有 60 层一致，展开一层", "orange")
-p.box(235, 105, 650, ["归一化输入 H [N,6144]", ("来自 03 的 Norm₁；位置 positions [N]", "weight")], 102)
+p = Plate("04-msa", 1120, 1940, "04 MSA 内部：独立索引找块，再算主注意力", "orange")
+p.box(235, 105, 650, ["归一化输入 H [N,6144]", ("来自 02 / 03 的 Norm₁；positions [N]", "weight")], 102)
 p.arrow([(560, 207), (560, 233), (285, 233), (285, 260)])
 p.arrow([(560, 233), (835, 233), (835, 260)])
 p.box(35, 260, 500, ["主 Q / K / V 三个 Linear", "Q [N,8192]；K/V 各 [N,512]", ("Wq [8192,6144]", "weight"), ("Wk / Wv 各 [512,6144]", "weight")], 177)
@@ -122,70 +109,10 @@ p.arrow([(835, 1432), (835, 1480)])
 p.arrow([(285, 1247), (285, 1480)])
 p.box(85, 1480, 950, ["按选中块读取主 K/V → 主 sparse attention", "logits=QKᵀ/√128 → causal mask → softmax → 加权 V", "每头在有效选中 key 上归一化；输出 [N,64,128]", ("每 KV 组最多 16×128 个候选位置；不物化完整 N×T 主分数", "weight")], 177)
 p.down(560, 1657, 1695)
-p.box(135, 1695, 850, ["merge heads [N,8192] → O Linear → A [N,6144]", ("Wo [6144,8192]；返回 03 第一次残差加法", "weight")], 102)
+p.box(135, 1695, 850, ["merge heads [N,8192] → O Linear → A [N,6144]", ("Wo [6144,8192]；返回 02 / 03 第一次残差加法", "weight")], 102)
 p.text(40, 1840, "融合可将五路投影合成 [N,9856]，逻辑分支仍如上。", "small")
-p.text(40, 1878, "这里的 index Top-K 选择块；MoE Top-K 选择专家（见 05）。", "small")
+p.text(40, 1878, "这里的 index Top-K 选择块；MoE Top-K 选择专家（见 03）。", "small")
 msa = p
-
-# Central spine: cover every repeated family and display one actual layer.
-p = Plate("03-decoder", 1120, 1940, "03 语言主干：完整层级 + 一层的两次残差", "purple")
-p.box(160, 105, 800, ["合并后的 X⁰ [N,6144]", "Embedding / 视觉替换输出（01）"], 102)
-p.down(560, 207, 245)
-p.box(160, 245, 800, ["层 0、1、2：MSA + Dense FFN ×3", "结构相同，权重各层独立；Dense 展开见 04"], 102)
-p.down(560, 347, 385)
-p.box(160, 385, 800, ["层 3 … 59：MSA + MoE ×57", "结构相同，权重各层独立；MoE 展开见 05"], 102)
-p.text(560, 540, "下方为任意一层 ℓ 的等价逻辑前向", "node", "middle")
-p.box(230, 575, 660, ["层输入 Xℓ [N,6144]"], 68)
-p.down(560, 643, 685)
-p.box(230, 685, 660, ["Norm₁：GemmaRMSNorm", "H=Norm₁(Xℓ) [N,6144]", ("W [6144]；ε=10⁻⁶；增益=1+W", "weight")], 137)
-p.down(560, 822, 860)
-p.box(230, 860, 660, ["MSA（完整展开见左侧 02）", "H [N,6144] → A [N,6144]"], 102)
-p.down(560, 962, 1005); p.add(560, 1025)
-p.arrow([(230, 609), (105, 609), (105, 1025), (540, 1025)])
-p.text(115, 993, "Xℓ 残差", "small")
-p.down(560, 1045, 1080)
-p.box(230, 1080, 660, ["U=Xℓ+A [N,6144]", "Norm₂(U) → Z [N,6144]", ("独立 W [6144]，形状保持、数值归一化", "weight")], 137)
-p.down(560, 1217, 1255)
-p.box(230, 1255, 660, ["按层选择 FFN（右侧 04 / 05）", "0–2：Dense；3–59：MoE", "Z [N,6144] → F [N,6144]"], 137)
-p.down(560, 1392, 1430); p.add(560, 1450)
-p.arrow([(890, 1115), (1015, 1115), (1015, 1450), (580, 1450)])
-p.text(900, 1418, "U 残差", "small")
-p.down(560, 1470, 1505)
-p.box(230, 1505, 660, ["Xℓ⁺¹=U+F [N,6144]", "送下一层；直到第 59 层完成"], 102)
-p.down(560, 1607, 1640)
-p.box(160, 1640, 800, ["Final GemmaRMSNorm → 选定位置 [R,6144]", "LM Head：W [200064,6144]（与 Embedding 独立）", "logits [R,200064] → 采样 ID → 下一轮查 Embedding"], 137)
-p.text(40, 1822, "普通生成 R=B；全位置输出 R=N。返回采样 ID 为整数。", "small")
-p.text(40, 1860, "融合实现可返回 F 与 residual=U，下一层 Norm 才相加。", "small")
-p.text(40, 1898, "图中展开为数学等价加法；不要额外重复添加残差。", "small")
-decoder = p
-
-# FFN family: dense, sparse routed + shared, and exact activation.
-p = Plate("04-05-ffn", 1120, 1940, "04 / 05 FFN：三层 Dense + 五十七层 MoE", "green")
-p.box(90, 110, 940, ["04 Dense：仅层 0、1、2，每层独立权重", "输入 Z [N,6144] → gate/up 各 [N,12288]", ("Wgate / Wup 各 [12288,6144]；融合宽度 24576", "weight"), "SwiGLU-OAI [N,12288] → down → F [N,6144]", ("Wdown [6144,12288]；F 返回主干残差加法", "weight")], 212)
-p.text(560, 380, "05 MoE：层 3 … 59，以下完整展开一层", "node", "middle")
-p.box(235, 415, 650, ["输入 Z [N,6144]"], 68)
-p.arrow([(560, 483), (560, 515), (315, 515), (315, 550)])
-p.arrow([(560, 515), (900, 515), (900, 550)])
-p.box(45, 550, 540, ["Router Linear（FP32）", "Wrouter [128,6144] → logits [N,128]", "sigmoid → s [N,128]"], 137)
-p.box(665, 550, 415, ["1 个 Shared Expert", "每个 token 都经过", "输入 [N,6144]"], 137)
-p.down(315, 687, 725)
-p.box(45, 725, 540, ["Top-4：按 s + correction bias 选", "bias [128]；expert IDs [N,4]", "取原始 s，归一化成 r [N,4]", ("不是对加 bias 的分数做输出加权", "weight")], 177)
-p.down(315, 902, 940)
-p.box(45, 940, 540, ["Dispatch：按 expert ID 分组", "总任务数 4N；expert e 收 nₑ 行", "Zₑ [nₑ,6144]；Σnₑ=4N"], 137)
-p.down(315, 1077, 1115)
-p.box(45, 1115, 540, ["选中专家的 FFN（128 中取 4）", "gate/up 各 [nₑ,3072] → 激活", "→ down → Yₑ [nₑ,6144]", ("W1/W3 [3072,6144]；W2 [6144,3072]", "weight")], 177)
-p.arrow([(900, 687), (900, 1115)])
-p.box(665, 1115, 415, ["共享 FFN", "6144 → 3072 → 6144", "输出 [N,6144]", ("权重维度同单个路由专家", "weight")], 177)
-p.down(315, 1292, 1330)
-p.box(45, 1330, 540, ["Combine：按原 token 顺序回收", "Rₙ=2.0×Σₖ rₙₖ·Yₙₖ", "路由输出 R [N,6144]"], 137)
-p.add(630, 1510)
-p.arrow([(315, 1467), (315, 1510), (610, 1510)])
-p.arrow([(900, 1292), (900, 1510), (650, 1510)])
-p.down(630, 1530, 1560)
-p.box(175, 1560, 910, ["F=R+Shared [N,6144] → 返回 03 的第二次残差加法"], 68)
-p.box(45, 1670, 1035, ["Dense / Routed / Shared 共用同一种 SwiGLU-OAI", "g′=min(g,7)；u′=clamp(u,−7,7)", "activation=g′×sigmoid(1.702g′)×(u′+1)", ("最后一维从 2I → I；Dense I=12288，Expert I=3072", "weight")], 177)
-p.text(40, 1895, "共享专家不占 Top-4 名额；每 token 为 4 路由 + 1 共享。", "small")
-ffn = p
 
 # Entire visual path with one representative ViT layer.
 p = Plate("06-vision", 3480, 1450, "06 视觉全链路：预处理 → Patch Embedding → ViT ×32 → Projector → 2×2 Merger → 占位替换", "teal")
@@ -203,7 +130,7 @@ p.text(45, 685, "视觉塔输出 → 对齐文本通道 → 压缩空间 token �
 p.box(35, 730, 770, ["ViT 最后输出", "V [Nv,1280]", "教学例：[2304,1280]", ("不添加 CLS；LayerNorm 与文本 RMSNorm 不同", "weight")], 177)
 p.box(915, 730, 770, ["Projector：两层 Linear + GELU", "1280 → 6144 → 6144，token 数不变", ("W₁ [6144,1280]；W₂ [6144,6144]", "weight"), "[2304,1280] → [2304,6144]"], 177)
 p.box(1795, 730, 770, ["2×2 空间拼接 → 两层 Merge MLP", "[Nv,6144] → [Nv/4,24576]（只重排）", ("W₁ [6144,24576]；W₂ [6144,6144]", "weight"), "GELU；教学例最终 [576,6144]"], 177)
-p.box(2675, 730, 770, ["按位置替换语言 embedding", "视觉向量 [Nv/4,6144] → 同宽占位位置", "100 个非视觉 token + 576 个图像位置", "→ [676,6144] → 语言第 0 层（01 / 03）"], 177)
+p.box(2675, 730, 770, ["按位置替换语言 embedding", "视觉向量 [Nv/4,6144] → 同宽占位位置", "100 个非视觉 token + 576 个图像位置", "→ [676,6144] → 语言第 0 层（01 / 02）"], 177)
 for a,b in [(805,915),(1685,1795),(2565,2675)]:p.arrow([(a,818),(b,818)])
 p.box(35, 960, 1650, ["图像数值流转：像素归一化会改值，patchify/reshape 只重排", "Conv / Linear / GELU / Norm / attention / residual 都参与数值计算", "2×2 拼接后 4×6144=24576；可训练 MLP 才压缩到 6144，不是求均值", "所有 projector / merger bias 均为 [6144]；ViT FFN bias 为 [5120]、[1280]"], 177, "#f3f6fa")
 p.box(1795, 960, 1650, ["视频教学例：已采样/补齐 8 帧，处理后每帧 672×672", "grid=[4,48,48] → Nv=9216 → pixels [9216,1176] → [2304,6144]", "temporal patch=2 先压时间；2×2 merger 仅压空间；时间戳等控制 token 另计", "当前实现按时间 grid 每 4 组限段；长视频分段双向 attention，段间隔离"], 177, "#f3f6fa")
@@ -222,21 +149,24 @@ p.box(1775, 380, 1670, ["可选 DSpark 草稿分支：不属于 target 的第 61
 p.box(35, 685, 3410, ["读图约定：激活 shape 默认全局逻辑维度；Linear 权重为 [out,in]，计算 X·Wᵀ；不同层独立权重、独立 KV 内容。", "TP/EP/量化会改变本地或文件布局：如 TP=4 的五路投影本地宽度为 2560；NVFP4 的单 expert W1 逻辑 [3072,6144]，U8 打包 [3072,3072]。", "实线为本区数据流；折线路径为分支/残差；编号为跨区模块引用。本图按固定配置与本地实现静态核验，示例不是模型真实激活。", "来源：HF ce7f4df87d2e05262f5775f373dac4772f134041；architecture/sources 配置与 73 项 header 抽样；公式和来源详见 model_analyze.md。"], 177, "#f3f6fa")
 runtime = p
 
-plates = [inputs, msa, decoder, ffn, vision, runtime]
+from detailed_sections import build_sections
+
+overview, dense, moe, features = build_sections(Plate, COLORS)
+plates = [overview, dense, moe, msa, features, vision, runtime]
 for p in plates:
     (OUT / f"{p.name}.svg").write_text(p.render(), encoding="utf-8")
 
-placements = [(inputs,60,170),(msa,60,710),(decoder,1240,710),(ffn,2420,710),
-              (vision,60,2700),(runtime,60,4200)]
-W,H=3600,5260
+placements = [(overview,60,170),(dense,60,1050),(moe,1540,1050),
+              (msa,60,3320),(features,1240,3320),(vision,60,5310),(runtime,60,6810)]
+W,H=3600,7870
 full=[f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img">',
-      '<title>MiniMax-M3.1-Flash 详细架构与张量流转</title>',
+      '<title>MiniMax-M3.1-Flash：整体顺序、Dense 与 MoE 层、MSA 及视觉塔</title>',
       f'<rect width="{W}" height="{H}" fill="white"/>',STYLE,
-      '<text x="1800" y="68" class="title" text-anchor="middle">MiniMax-M3.1-Flash · 全层级结构、Shape 与数据轮转</text>',
-      '<text x="1800" y="116" class="body" text-anchor="middle">同构层仅展开一次：文本 3 Dense + 57 MoE，全部 MSA；视觉 Transformer ×32；附缓存时序与可选草稿分支</text>']
+      '<text x="1800" y="68" class="title" text-anchor="middle">MiniMax-M3.1-Flash · 先看整体，再看 token 在层内怎么走</text>',
+      '<text x="1800" y="116" class="body" text-anchor="middle">视觉塔先编码并合入语言序列 → 3 层 MSA + Dense FFN → 57 层 MSA + MoE → 输出；同构层只展开一次</text>']
 for p,x,y in placements:
     full.append(f'<g transform="translate({x},{y})">'+"\n".join(p.items)+"</g>")
-full.append('<text x="60" y="5205" class="note">2026-11-12 · 可编辑 SVG / 高清 PNG / 分区图；W 为参数，X/H/Q/K/V 为激活；参数不随普通推理轮次更新。</text></svg>')
+full.append('<text x="60" y="7815" class="note">2026-11-13 · 可编辑 SVG / 高清 PNG / 分区图；W 为参数，X/H/Q/K/V 为激活；参数不随普通推理轮次更新。</text></svg>')
 (ROOT / "minimax-m31-detailed-architecture.svg").write_text("\n".join(full),encoding="utf-8")
 (OUT / "layout.json").write_text(json.dumps({"width":W,"height":H,"plates":[{"name":p.name,"x":x,"y":y,"width":p.w,"height":p.h} for p,x,y in placements]},indent=2)+"\n",encoding="utf-8")
 print(f"Generated full SVG and {len(plates)} detail plates in {ROOT}")
@@ -277,13 +207,13 @@ const pre=document.createElement('pre');pre.id='qa';pre.textContent=JSON.stringi
         assert match, "Browser text-layout QA did not complete"
         assert not json.loads(html.unescape(match.group(1))), match.group(1)
     image = Image.open(ROOT / "minimax-m31-detailed-architecture.png")
-    assert image.size == (5400, 7890), image.size
+    assert image.size == (round(W*1.5), round(H*1.5)), image.size
     scale = image.width / W
     for plate, x, y in placements:
         bounds = tuple(round(v*scale) for v in (x,y,x+plate.w,y+plate.h))
         image.crop(bounds).save(OUT / (plate.name+".png"))
-    image.resize((1200, 1753)).save(OUT / "overview-preview.png")
-    print("PNG export passed: 5400×7890; 6 plates; no overflowing node text")
+    image.resize((1200, round(H/3))).save(OUT / "overview-preview.png")
+    print(f"PNG export passed: {image.width}x{image.height}; {len(plates)} plates; no overflowing node text")
 
 
 if __name__ == "__main__":

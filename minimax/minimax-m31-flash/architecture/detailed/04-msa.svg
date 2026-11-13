@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="1940" viewBox="0 0 1120 1940" role="img"><title>02-msa</title><rect width="1120" height="1940" fill="white"/><style>
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="1940" viewBox="0 0 1120 1940" role="img"><title>04-msa</title><rect width="1120" height="1940" fill="white"/><style>
 text{font-family:'Microsoft YaHei','Noto Sans CJK SC',Arial,sans-serif;fill:#22364c}
 .title{font-size:44px;font-weight:700}.head{font-size:31px;font-weight:700}
 .node{font-size:25px;font-weight:600}.body{font-size:24px}.small{font-size:22px}
@@ -6,11 +6,11 @@ text{font-family:'Microsoft YaHei','Noto Sans CJK SC',Arial,sans-serif;fill:#223
 </style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
 markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 <path d="M0 0L10 5L0 10Z" fill="#617186"/></marker></defs><rect x="1" y="1" width="1118" height="1938" rx="18" fill="#fbfcfe" stroke="#b9741d" stroke-width="1.7"/>
-<text x="28" y="49" class="head" text-anchor="start">02 MSA：所有 60 层一致，展开一层</text>
+<text x="28" y="49" class="head" text-anchor="start">04 MSA 内部：独立索引找块，再算主注意力</text>
 <line x1="28" y1="75" x2="1092" y2="75" stroke="#b9741d" opacity=".35"/>
 <rect x="235" y="105" width="650" height="102" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
 <text data-max-width="622" x="560.0" y="140" class="node" text-anchor="middle">归一化输入 H [N,6144]</text>
-<text data-max-width="622" x="560.0" y="175" class="weight" text-anchor="middle">来自 03 的 Norm₁；位置 positions [N]</text>
+<text data-max-width="622" x="560.0" y="175" class="weight" text-anchor="middle">来自 02 / 03 的 Norm₁；positions [N]</text>
 <polyline points="560,207 560,233 285,233 285,260" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
 <polyline points="560,233 835,233 835,260" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
 <rect x="35" y="260" width="500" height="177" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
@@ -84,6 +84,6 @@ markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 <polyline points="560,1657 560,1695" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
 <rect x="135" y="1695" width="850" height="102" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
 <text data-max-width="822" x="560.0" y="1730" class="node" text-anchor="middle">merge heads [N,8192] → O Linear → A [N,6144]</text>
-<text data-max-width="822" x="560.0" y="1765" class="weight" text-anchor="middle">Wo [6144,8192]；返回 03 第一次残差加法</text>
+<text data-max-width="822" x="560.0" y="1765" class="weight" text-anchor="middle">Wo [6144,8192]；返回 02 / 03 第一次残差加法</text>
 <text x="40" y="1840" class="small" text-anchor="start">融合可将五路投影合成 [N,9856]，逻辑分支仍如上。</text>
-<text x="40" y="1878" class="small" text-anchor="start">这里的 index Top-K 选择块；MoE Top-K 选择专家（见 05）。</text></svg>
+<text x="40" y="1878" class="small" text-anchor="start">这里的 index Top-K 选择块；MoE Top-K 选择专家（见 03）。</text></svg>

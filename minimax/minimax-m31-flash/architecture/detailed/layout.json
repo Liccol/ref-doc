@@ -1,46 +1,53 @@
 {
   "width": 3600,
-  "height": 5260,
+  "height": 7870,
   "plates": [
     {
-      "name": "01-inputs",
+      "name": "01-overview",
       "x": 60,
       "y": 170,
       "width": 3480,
-      "height": 490
+      "height": 830
     },
     {
-      "name": "02-msa",
+      "name": "02-dense-layer",
       "x": 60,
-      "y": 710,
+      "y": 1050,
+      "width": 1420,
+      "height": 2220
+    },
+    {
+      "name": "03-moe-layer",
+      "x": 1540,
+      "y": 1050,
+      "width": 2000,
+      "height": 2220
+    },
+    {
+      "name": "04-msa",
+      "x": 60,
+      "y": 3320,
       "width": 1120,
       "height": 1940
     },
     {
-      "name": "03-decoder",
+      "name": "05-msa-features-and-ffn",
       "x": 1240,
-      "y": 710,
-      "width": 1120,
-      "height": 1940
-    },
-    {
-      "name": "04-05-ffn",
-      "x": 2420,
-      "y": 710,
-      "width": 1120,
+      "y": 3320,
+      "width": 2300,
       "height": 1940
     },
     {
       "name": "06-vision",
       "x": 60,
-      "y": 2700,
+      "y": 5310,
       "width": 3480,
       "height": 1450
     },
     {
       "name": "07-runtime",
       "x": 60,
-      "y": 4200,
+      "y": 6810,
       "width": 3480,
       "height": 930
     }

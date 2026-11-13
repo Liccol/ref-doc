@@ -6,6 +6,8 @@
 
 配合[现有模型结构图](architecture/README.md)阅读。第 1～7 节是逐层 shape 速查，第 8～10 节解释输入、数值变化和完整算例，第 11～15 节展开缓存、视觉、并行、量化与 DSpark。除特别注明，shape 均为**未切 TP/EP、未量化打包的逻辑形状**。
 
+2026-11-13 图解修订：[整体执行顺序](architecture/detailed/01-overview.png) → [前 3 层 Dense](architecture/detailed/02-dense-layer.png) / [后 57 层 MoE](architecture/detailed/03-moe-layer.png)；[MSA 特征与 FFN 对比](architecture/detailed/05-msa-features-and-ffn.png)单独解释两个不同的“稀疏”。视觉塔先生成同宽视觉向量，再按占位位置与语言向量合成同一序列；进入 MoE 后，两类位置都同时进入 router 和共享分支，不按模态固定分路。
+
 先区分三个对象：**模型参数**是训练得到的权重，推理时通常保持数值和 shape 不变；**激活张量**是输入经过每步运算得到的中间值；**运行时状态**包括 KV cache、位置、块表和路由索引，会随请求推进而更新。下文所谓“轮转”主要指后两者的数据流与状态变化。
 
 ## 1. 结论与核心配置
@@ -449,6 +451,8 @@ block_size=7 是草稿生成/验证块的配置，不等于 7 个草稿层，也
 ### 16.2 本工作区实现
 
 vLLM HEAD=`ced6857afa0ea7b2e3f0846a62e1394e90f15607`；vLLM Ascend HEAD=`5666e6616ecc0155fb9ae79d861eb9f9781e6f31`。以下相对链接从本文位置指向同一工作区的仓库；它们不是公开 HF 自带的模型实现。
+
+仓库来源：语言主干和 Ascend MSA 为 [ycl-ai-infra/vllm-ascend-private](https://github.com/ycl-ai-infra/vllm-ascend-private/tree/5666e6616ecc0155fb9ae79d861eb9f9781e6f31)；视觉塔等共用组件为 [vllm-project/vllm](https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607)。M3.1 使用 M3 系列共用目录 `minimax_m3`：官方 `architectures=MiniMaxM3SparseForConditionalGeneration` 经 [Ascend 模型注册](../../../vllm-ascend-private/vllm_ascend/models/__init__.py)映射到该目录；Decoder 读取 M3.1 配置中全为 1 的 `sparse_attention_freq` 和前三项为 0 的 `moe_layer_freq`，选择 60 层 MSA、前 3 Dense / 后 57 MoE。此项为静态注册与配置分支核验，不是本次实际运行的 dispatch trace。
 
 - [Ascend 语言模型](../../../vllm-ascend-private/vllm_ascend/models/minimax_m3/minimax_m3.py)：`MiniMaxM3SparseAttention`、`MiniMaxM3MLP`、`MiniMaxM3MoE`、`MiniMaxM3DecoderLayer`；投影、激活、路由参数和延后残差。
 - [Ascend MSA 实现](../../../vllm-ascend-private/vllm_ascend/models/minimax_m3/msa_m3.py)与 [MSA Triton kernels](../../../vllm-ascend-private/vllm_ascend/models/minimax_m3/ops/msa_m3_triton.py)：cache、index score、local/init 优先级与 Top-K。

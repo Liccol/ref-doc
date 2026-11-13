@@ -73,7 +73,7 @@ markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 <text data-max-width="742" x="3060.0" y="765" class="node" text-anchor="middle">按位置替换语言 embedding</text>
 <text data-max-width="742" x="3060.0" y="800" class="body" text-anchor="middle">视觉向量 [Nv/4,6144] → 同宽占位位置</text>
 <text data-max-width="742" x="3060.0" y="835" class="body" text-anchor="middle">100 个非视觉 token + 576 个图像位置</text>
-<text data-max-width="742" x="3060.0" y="870" class="body" text-anchor="middle">→ [676,6144] → 语言第 0 层（01 / 03）</text>
+<text data-max-width="742" x="3060.0" y="870" class="body" text-anchor="middle">→ [676,6144] → 语言第 0 层（01 / 02）</text>
 <polyline points="805,818 915,818" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
 <polyline points="1685,818 1795,818" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
 <polyline points="2565,818 2675,818" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
