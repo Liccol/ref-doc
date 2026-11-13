@@ -15,13 +15,15 @@
 | 主线 | [PNG](main-path.png) / [SVG](main-path.svg) | 输入到输出的完整路径 |
 | ① | [视觉塔](01-vision.png) / [SVG](01-vision.svg) | Patch Embed、ViT ×32、projector、merger、返回视觉向量 |
 | ② | [GemmaRMSNorm](02-gemma-rmsnorm.png) / [SVG](02-gemma-rmsnorm.svg) | RMS 归一化、1+w 增益、归一化轴和 shape |
-| ③ | [Attention / MSA](03-attention-msa.png) / [SVG](03-attention-msa.svg) | 主 QKV、轻量 Indexer、按组 Block Top-K、Block-Sparse GQA、输出投影 |
+| ③ | [Attention / MSA](03-attention-msa.png) / [SVG](03-attention-msa.svg) | 参考论文 Figure 1：Index Branch、Main Branch、Top-K KV Blocks、Sparse Attention 和按组 mask 示意 |
 | ④ | [Dense FFN](04-dense-ffn.png) / [SVG](04-dense-ffn.svg) | gate/up、SwiGLU-OAI、down |
 | ⑤ | [MoE](05-moe.png) / [SVG](05-moe.svg) | Router、128 个 Routed MLP 中选 4 个、共享 MLP、路由加权和与结果相加 |
 
-MSA 小图只突出 MiniMax 的特殊机制：独立索引分支先为历史块打分，4 个 GQA 组分别选择 Top-16 个 128-token 块，主分支再在所选范围内计算 attention；强制 local 块占用 Top-16 预算。Norm/RoPE 和缓存读写等细节不再铺在此小图中，完整过程见[文字详解](../../model_analyze.md)与[扩展 MSA 图](../detailed/04-msa.png)。
+MSA 小图改为参考 [MSA 论文 Figure 1](https://arxiv.org/html/2606.13392v2#S0.F1)重新绘制的可编辑结构图，保留其左右双分支和按组 mask 的表达：Index Branch 经 Linear Projection、Norm/RoPE、index Q/K、Index Score、Block Max Pooling 产生块索引；索引连接 Main Branch 的 Top-K KV Blocks，再由主 Q/K/V 执行 Sparse Attention。V 绕过 Norm/RoPE，主 Q 绕过 KV 选择直接进入 attention。
 
-图中 DSA 特指 DeepSeek-V3.2 的 DeepSeek Sparse Attention。两者都有 Indexer；“先选再算”并非 MSA 独有，真正要区分的是按块选取与按 GQA 组独立选择：
+为接回本图的语言层，顶部补充 O Projection。底部标注本模型实际配置：4 个 GQA 组、block=128、Top-16 / 组及强制 local。mask 仅展示两个组如何产生不同选块的教学示意，不代表模型只有两组，也不是实测 attention mask。完整 shape 与缓存过程见[文字详解](../../model_analyze.md)和[扩展 MSA 图](../detailed/04-msa.png)。
+
+以下补充对比中的 DSA 特指 DeepSeek-V3.2 的 DeepSeek Sparse Attention。DSA 对照文字移出 MSA 小图，仅在文档保留。两者都有 Indexer；“先选再算”并非 MSA 独有，真正要区分的是按块选取与按 GQA 组独立选择：
 
 | 项目 | DSA（DeepSeek-V3.2） | MSA（本图的 M3.1） |
 | --- | --- | --- |

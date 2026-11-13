@@ -154,42 +154,141 @@ markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 <polyline points="450.0,211.0 450.0,173.0" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)" />
 <rect x="155" y="105.0" width="590" height="68" rx="10" fill="#f0f7ec" stroke="#c9d4e0" stroke-width="1.7" />
 <text data-max-width="562" x="450.0" y="140.0" class="node" text-anchor="middle">Down Linear → [N,6144]</text></g>
-<g transform="translate(2200,720)"><rect x="1" y="1" width="1078" height="1288" rx="18" fill="#fbfcfe" stroke="#b9741d" stroke-width="1.7"/>
-<text x="28" y="49" class="head" text-anchor="start">③ MSA：轻量索引 + 按组稀疏 GQA</text>
+<g transform="translate(2200,720)"><rect x="1" y="1" width="1078" height="1448" rx="18" fill="#fbfcfe" stroke="#b9741d" stroke-width="1.7"/>
+<text x="28" y="49" class="head" text-anchor="start">③ MSA：参考论文 Figure 1 的双分支结构</text>
 <line x1="28" y1="75" x2="1052" y2="75" stroke="#b9741d" opacity=".35"/>
-<rect x="100" y="110" width="880" height="102" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="852" x="540.0" y="145" class="node" text-anchor="middle">O Projection</text>
-<text data-max-width="852" x="540.0" y="180" class="body" text-anchor="middle">[N,8192] → [N,6144]</text>
-<rect x="100" y="265" width="880" height="137" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="852" x="540.0" y="300" class="node" text-anchor="middle">Block-Sparse GQA</text>
-<text data-max-width="852" x="540.0" y="335" class="body" text-anchor="middle">主 Q/K/V 只在选中的历史块上计算 attention</text>
-<text data-max-width="852" x="540.0" y="370" class="body" text-anchor="middle">64 个 Q heads / 4 个 KV heads</text>
-<polyline points="540,265 540,212" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<rect x="40" y="620" width="480" height="137" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="452" x="280.0" y="655" class="node" text-anchor="middle">主 Q / K / V Projection</text>
-<text data-max-width="452" x="280.0" y="690" class="body" text-anchor="middle">Q [N,64,128]</text>
-<text data-max-width="452" x="280.0" y="725" class="body" text-anchor="middle">K/V 各 [N,4,128]</text>
-<rect x="580" y="620" width="460" height="137" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="432" x="810.0" y="655" class="node" text-anchor="middle">轻量 Indexer</text>
-<text data-max-width="432" x="810.0" y="690" class="body" text-anchor="middle">独立 index Q/K，4 个索引头</text>
-<text data-max-width="432" x="810.0" y="725" class="body" text-anchor="middle">为历史块打分：块内取 max</text>
-<rect x="580" y="430" width="460" height="137" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="432" x="810.0" y="465" class="node" text-anchor="middle">按组、按块 Top-K</text>
-<text data-max-width="432" x="810.0" y="500" class="body" text-anchor="middle">每个 GQA 组独立选 Top-16 块</text>
-<text data-max-width="432" x="810.0" y="535" class="body" text-anchor="middle">每块 128 token；强制包含 local</text>
-<polyline points="800,620 800,567" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<polyline points="800,430 800,402" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<polyline points="280,620 280,402" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<rect x="230" y="900" width="620" height="68" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="592" x="540.0" y="935" class="node" text-anchor="middle">输入 H [N,6144]</text>
-<polyline points="540,900 540,850 280,850 280,757" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<polyline points="540,850 800,850 800,757" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<rect x="40" y="1010" width="1000" height="247" rx="10" fill="#f3f6fa" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="972" x="540.0" y="1045" class="node" text-anchor="middle">与 DSA（DeepSeek-V3.2）的关键区别</text>
-<text data-max-width="972" x="540.0" y="1080" class="body" text-anchor="middle">DSA：按 token 选；同一 query 的各 Q heads 共享选点。</text>
-<text data-max-width="972" x="540.0" y="1115" class="body" text-anchor="middle">MSA：按 block 选；每个 GQA 组独立选块。</text>
-<text data-max-width="972" x="540.0" y="1150" class="body" text-anchor="middle">索引评分：DSA 多头 ReLU 加权聚合；MSA 块内 max。</text>
-<text data-max-width="972" x="540.0" y="1185" class="body" text-anchor="middle">两者都有 Indexer；“按块 + 按组”才是这里要突出的区别。</text></g>
+<rect x="20" y="220" width="1040" height="820" rx="18" fill="#f7f7f7" stroke="#adb4bb" stroke-width="1.7"/>
+<text x="50" y="247" class="node" text-anchor="start">Index Branch</text>
+<text x="590" y="247" class="node" text-anchor="start">Main Branch</text>
+<rect x="590" y="110" width="420" height="68" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="392" x="800.0" y="145" class="node" text-anchor="middle">O Projection → 输出</text>
+<polyline points="800,280 800,178" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="590" y="280" width="420" height="102" rx="10" fill="#e9f2fb" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="392" x="800.0" y="315" class="node" text-anchor="middle">Sparse Attention</text>
+<text data-max-width="392" x="800.0" y="350" class="body" text-anchor="middle">只在选中 KV blocks 内计算</text>
+<rect x="50" y="360" width="420" height="102" rx="10" fill="#ebf6ec" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="392" x="260.0" y="395" class="node" text-anchor="middle">Block Max Pooling</text>
+<text data-max-width="392" x="260.0" y="430" class="body" text-anchor="middle">→ Top-K block indices</text>
+<rect x="50" y="520" width="420" height="102" rx="10" fill="#ebf6ec" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="392" x="260.0" y="555" class="node" text-anchor="middle">Index Score</text>
+<text data-max-width="392" x="260.0" y="590" class="body" text-anchor="middle">Q_idx × K_idxᵀ</text>
+<polyline points="260,520 260,462" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="590" y="480" width="420" height="102" rx="10" fill="#ebf6ec" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="392" x="800.0" y="515" class="node" text-anchor="middle">Top-K KV Blocks</text>
+<text data-max-width="392" x="800.0" y="550" class="body" text-anchor="middle">按索引选取主 K / V</text>
+<polyline points="800,480 800,382" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="470,394 530,394 530,531 590,531" fill="none" stroke="#3c8251" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="60" y="660" width="170" height="68" rx="10" fill="#ebf6ec" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="142" x="145.0" y="695" class="node" text-anchor="middle">K_idx</text>
+<rect x="280" y="660" width="170" height="68" rx="10" fill="#ebf6ec" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="142" x="365.0" y="695" class="node" text-anchor="middle">Q_idx</text>
+<polyline points="145,660 145,622" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="365,660 365,622" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="570" y="660" width="130" height="68" rx="10" fill="#e9f2fb" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="102" x="635.0" y="695" class="node" text-anchor="middle">V</text>
+<rect x="730" y="660" width="130" height="68" rx="10" fill="#e9f2fb" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="102" x="795.0" y="695" class="node" text-anchor="middle">K</text>
+<rect x="890" y="660" width="130" height="68" rx="10" fill="#e9f2fb" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="102" x="955.0" y="695" class="node" text-anchor="middle">Q</text>
+<polyline points="635,660 635,582" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="795,660 795,582" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="955,660 1040,660 1040,331 1010,331" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="75" y="800" width="370" height="68" rx="10" fill="#f3eafa" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="342" x="260.0" y="835" class="node" text-anchor="middle">Norm &amp; RoPE</text>
+<polyline points="260,800 260,770 145,770 145,728" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="260,770 365,770 365,728" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="725" y="800" width="300" height="68" rx="10" fill="#f3eafa" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="272" x="875.0" y="835" class="node" text-anchor="middle">Norm &amp; RoPE</text>
+<polyline points="875,800 875,770 795,770 795,728" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="875,770 955,770 955,728" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="50" y="920" width="420" height="68" rx="10" fill="#fff4e2" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="392" x="260.0" y="955" class="node" text-anchor="middle">Linear Projection</text>
+<rect x="590" y="920" width="420" height="68" rx="10" fill="#fff4e2" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="392" x="800.0" y="955" class="node" text-anchor="middle">Linear Projection</text>
+<polyline points="260,920 260,868" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="800,920 800,885 875,885 875,868" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="800,885 635,885 635,728" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="250" y="1080" width="580" height="68" rx="10" fill="#fff5e5" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="552" x="540.0" y="1115" class="node" text-anchor="middle">Hidden States [N,6144]</text>
+<polyline points="540,1080 540,1050 260,1050 260,988" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="540,1050 800,1050 800,988" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<text x="182" y="1195" class="small" text-anchor="middle">Query Group 1</text>
+<rect x="110" y="1210" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="110" y="1228" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="128" y="1228" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="110" y="1246" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="128" y="1246" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="146" y="1246" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="110" y="1264" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="128" y="1264" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="146" y="1264" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="164" y="1264" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="110" y="1282" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="128" y="1282" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="146" y="1282" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="164" y="1282" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="182" y="1282" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="110" y="1300" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="128" y="1300" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="146" y="1300" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="164" y="1300" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="182" y="1300" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="200" y="1300" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="110" y="1318" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="128" y="1318" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="146" y="1318" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="164" y="1318" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="182" y="1318" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="200" y="1318" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="218" y="1318" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="110" y="1336" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="128" y="1336" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="146" y="1336" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="164" y="1336" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="182" y="1336" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="200" y="1336" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="218" y="1336" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="236" y="1336" width="18" height="18" rx="0" fill="#8782b3" stroke="#c8c8cc" stroke-width="1.7"/>
+<text x="752" y="1195" class="small" text-anchor="middle">Query Group 2</text>
+<rect x="680" y="1210" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="680" y="1228" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="698" y="1228" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="680" y="1246" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="698" y="1246" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="716" y="1246" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="680" y="1264" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="698" y="1264" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="716" y="1264" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="734" y="1264" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="680" y="1282" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="698" y="1282" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="716" y="1282" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="734" y="1282" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="752" y="1282" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="680" y="1300" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="698" y="1300" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="716" y="1300" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="734" y="1300" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="752" y="1300" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="770" y="1300" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="680" y="1318" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="698" y="1318" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="716" y="1318" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="734" y="1318" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="752" y="1318" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="770" y="1318" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="788" y="1318" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="680" y="1336" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="698" y="1336" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="716" y="1336" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="734" y="1336" width="18" height="18" rx="0" fill="#f5f5f5" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="752" y="1336" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="770" y="1336" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="788" y="1336" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<rect x="806" y="1336" width="18" height="18" rx="0" fill="#9b8372" stroke="#c8c8cc" stroke-width="1.7"/>
+<text x="465" y="1260" class="small" text-anchor="middle">Attention Mask</text>
+<text x="465" y="1300" class="small" text-anchor="middle">同一 query，不同组可选不同块</text>
+<text x="540" y="1395" class="small" text-anchor="middle">M3.1：4 组；block=128；Top-16 / 组；local 必选。</text></g>
 <g transform="translate(1220,170)"><rect x="1" y="1" width="898" height="898" rx="18" fill="#fbfcfe" stroke="#4b853e" stroke-width="1.7"/>
 <text x="28" y="49" class="head" text-anchor="start">⑤ MoE：Router → MLP → 加权汇合</text>
 <line x1="28" y1="75" x2="872" y2="75" stroke="#4b853e" opacity=".35"/>

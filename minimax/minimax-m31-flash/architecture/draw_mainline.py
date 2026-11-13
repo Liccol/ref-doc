@@ -72,21 +72,57 @@ p.text(50,125,'y = x / sqrt(mean(x²) + ε) × (1+w)；ε=10⁻⁶；不减均�
 p.text(50,177,'层内沿最后 6144 维计算；主 Q/K 和 index Q/K 则每 head 沿 128 维计算，权重各自独立。','body')
 norm=p
 
-# MSA is intentionally a small conceptual inset, drawn bottom-to-top directly.
-p=Plate('03-attention-msa',1080,1290,'③ MSA：轻量索引 + 按组稀疏 GQA','orange')
-p.box(100,110,880,['O Projection','[N,8192] → [N,6144]'],102)
-p.box(100,265,880,['Block-Sparse GQA','主 Q/K/V 只在选中的历史块上计算 attention','64 个 Q heads / 4 个 KV heads'],137)
-p.arrow([(540,265),(540,212)])
-p.box(40,620,480,['主 Q / K / V Projection','Q [N,64,128]','K/V 各 [N,4,128]'],137)
-p.box(580,620,460,['轻量 Indexer','独立 index Q/K，4 个索引头','为历史块打分：块内取 max'],137)
-p.box(580,430,460,['按组、按块 Top-K','每个 GQA 组独立选 Top-16 块','每块 128 token；强制包含 local'],137)
-p.arrow([(800,620),(800,567)])
-p.arrow([(800,430),(800,402)])
-p.arrow([(280,620),(280,402)])
-p.box(230,900,620,['输入 H [N,6144]'],68)
-p.arrow([(540,900),(540,850),(280,850),(280,757)])
-p.arrow([(540,850),(800,850),(800,757)])
-p.box(40,1010,1000,['与 DSA（DeepSeek-V3.2）的关键区别','DSA：按 token 选；同一 query 的各 Q heads 共享选点。','MSA：按 block 选；每个 GQA 组独立选块。','索引评分：DSA 多头 ReLU 加权聚合；MSA 块内 max。','两者都有 Indexer；“按块 + 按组”才是这里要突出的区别。'],247,'#f3f6fa')
+# MSA inset follows Figure 1 of arXiv:2606.13392v2, redrawn as SVG.
+p=Plate('03-attention-msa',1080,1450,'③ MSA：参考论文 Figure 1 的双分支结构','orange')
+p.rect(20,220,1040,820,'#f7f7f7','#adb4bb',18)
+p.text(50,247,'Index Branch','node')
+p.text(590,247,'Main Branch','node')
+p.box(590,110,420,['O Projection → 输出'],68)
+p.arrow([(800,280),(800,178)])
+p.box(590,280,420,['Sparse Attention','只在选中 KV blocks 内计算'],102,'#e9f2fb')
+p.box(50,360,420,['Block Max Pooling','→ Top-K block indices'],102,'#ebf6ec')
+p.box(50,520,420,['Index Score','Q_idx × K_idxᵀ'],102,'#ebf6ec')
+p.arrow([(260,520),(260,462)])
+p.box(590,480,420,['Top-K KV Blocks','按索引选取主 K / V'],102,'#ebf6ec')
+p.arrow([(800,480),(800,382)])
+p.arrow([(470,394),(530,394),(530,531),(590,531)])
+p.items[-1]=p.items[-1].replace('stroke="#617186"','stroke="#3c8251"')
+p.box(60,660,170,['K_idx'],68,'#ebf6ec')
+p.box(280,660,170,['Q_idx'],68,'#ebf6ec')
+p.arrow([(145,660),(145,622)])
+p.arrow([(365,660),(365,622)])
+p.box(570,660,130,['V'],68,'#e9f2fb')
+p.box(730,660,130,['K'],68,'#e9f2fb')
+p.box(890,660,130,['Q'],68,'#e9f2fb')
+p.arrow([(635,660),(635,582)])
+p.arrow([(795,660),(795,582)])
+p.arrow([(955,660),(1040,660),(1040,331),(1010,331)])
+p.box(75,800,370,['Norm & RoPE'],68,'#f3eafa')
+p.arrow([(260,800),(260,770),(145,770),(145,728)])
+p.arrow([(260,770),(365,770),(365,728)])
+p.box(725,800,300,['Norm & RoPE'],68,'#f3eafa')
+p.arrow([(875,800),(875,770),(795,770),(795,728)])
+p.arrow([(875,770),(955,770),(955,728)])
+p.box(50,920,420,['Linear Projection'],68,'#fff4e2')
+p.box(590,920,420,['Linear Projection'],68,'#fff4e2')
+p.arrow([(260,920),(260,868)])
+p.arrow([(800,920),(800,885),(875,885),(875,868)])
+p.arrow([(800,885),(635,885),(635,728)])
+p.box(250,1080,580,['Hidden States [N,6144]'],68)
+p.arrow([(540,1080),(540,1050),(260,1050),(260,988)])
+p.arrow([(540,1050),(800,1050),(800,988)])
+# Illustrative causal block masks: group-specific choices, never measured data.
+for group,x,color in [(0,110,'#8782b3'),(1,680,'#9b8372')]:
+    p.text(x+72,1195,f'Query Group {group+1}','small','middle')
+    for row in range(8):
+        local=row//2
+        chosen={local,0 if group==0 else max(0,local-1)}
+        for col in range(row+1):
+            fill=color if col//2 in chosen else '#f5f5f5'
+            p.rect(x+col*18,1210+row*18,18,18,fill,'#c8c8cc',0)
+p.text(465,1260,'Attention Mask','small','middle')
+p.text(465,1300,'同一 query，不同组可选不同块','small','middle')
+p.text(540,1395,'M3.1：4 组；block=128；Top-16 / 组；local 必选。','small','middle')
 msa=p
 
 p=Plate('04-dense-ffn',900,650,'④ Dense FFN：每 token 用同一套本层参数','green')
