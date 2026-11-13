@@ -4,7 +4,7 @@
 
 ![主线及模块放大图](preview.png)
 
-左侧实线是端到端计算：输入 → 文本 Tokenizer / 视觉预处理 → Embedding / 视觉塔 → 按占位位置合并 → 前三层 → 后 57 层 → Final GemmaRMSNorm → LM Head → 采样 → 文本输出。输入阶段两路在进入语言主干前合并，后续只有一条主线。
+左侧实线按参考图习惯**从下向上**阅读：底部输入 → 文本 Tokenizer / 视觉预处理 → Embedding / 视觉塔 → 按占位位置合并 → 前三层 → 后 57 层 → Final GemmaRMSNorm → LM Head → 采样 → 顶部文本输出。输入阶段两路在进入语言主干前合并，后续只有一条主线。右侧 Dense、MoE、MSA 小图中的纵向运算同样从下向上，视觉塔的横向小图从左向右。
 
 前 3 层和后 57 层各用一个代表层框，并标记 ×3 / ×57；框内只列 GemmaRMSNorm、Attention、Dense FFN / MoE 及两次残差。结构相同不表示各层共享权重。
 

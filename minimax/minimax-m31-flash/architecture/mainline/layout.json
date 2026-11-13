@@ -12,35 +12,35 @@
     {
       "name": "01-vision",
       "x": 1220,
-      "y": 170,
+      "y": 2520,
       "width": 2060,
       "height": 540
     },
     {
       "name": "02-gemma-rmsnorm",
       "x": 1220,
-      "y": 760,
+      "y": 2220,
       "width": 2060,
       "height": 230
     },
     {
       "name": "04-dense-ffn",
       "x": 1220,
-      "y": 1040,
+      "y": 1500,
       "width": 900,
       "height": 650
     },
     {
       "name": "03-attention-msa",
       "x": 2200,
-      "y": 1040,
+      "y": 720,
       "width": 1080,
       "height": 1450
     },
     {
       "name": "05-moe",
       "x": 1220,
-      "y": 1760,
+      "y": 170,
       "width": 900,
       "height": 1280
     }

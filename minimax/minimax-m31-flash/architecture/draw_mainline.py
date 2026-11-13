@@ -126,25 +126,71 @@ p.text(450,1160,'语言和视觉 token 均走两条分支。','small','middle')
 p.text(450,1205,'Dense / MoE 的区别在 FFN；二者的 Attention 都是 MSA。','small','middle')
 moe=p
 
+def bottom_up(plate, low, high):
+    """Reverse diagram geometry while keeping text upright and box line order."""
+    import xml.etree.ElementTree as ET
+    axis=low+high
+    nodes=[ET.fromstring(item) for item in plate.items]
+    original=[ET.fromstring(item) for item in plate.items]
+    boxes=[n for n in original[3:] if n.tag=='rect' and low<=float(n.get('y')) and float(n.get('y'))+float(n.get('height'))<=high]
+    circles=[n for n in original[3:] if n.tag=='circle']
+    result=plate.items[:3]
+    for n in nodes[3:]:
+        if n.tag=='rect':
+            y,h=float(n.get('y')),float(n.get('height'))
+            if low<=y and y+h<=high:n.set('y',str(axis-y-h))
+        elif n.tag=='circle':
+            y=float(n.get('cy'))
+            if low<=y<=high:n.set('cy',str(axis-y))
+        elif n.tag=='polyline':
+            points=[tuple(map(float,s.split(','))) for s in n.get('points').split()]
+            if all(low<=y<=high for _,y in points):n.set('points',' '.join(f'{x},{axis-y}' for x,y in points))
+        elif n.tag=='text':
+            x,y=float(n.get('x')),float(n.get('y'))
+            if low<=y<=high:
+                if n.text=='+':
+                    circle=min(circles,key=lambda c:abs(float(c.get('cx'))-x)+abs(float(c.get('cy'))+8-y))
+                    n.set('y',str(axis-float(circle.get('cy'))+8))
+                else:
+                    enclosing=[b for b in boxes if float(b.get('x'))<=x<=float(b.get('x'))+float(b.get('width')) and float(b.get('y'))<=y<=float(b.get('y'))+float(b.get('height'))]
+                    if enclosing:
+                        box=min(enclosing,key=lambda b:float(b.get('width'))*float(b.get('height')))
+                        old=float(box.get('y'));h=float(box.get('height'))
+                        n.set('y',str(axis-old-h+(y-old)))
+                        if n.text and '重复 ×' in n.text:
+                            labels=['前三层','层 0–2','×3'] if n.text.startswith('前三层') else ['后 57 层','层 3–59','×57']
+                            n.set('x','165');n.set('text-anchor','end');n.set('class','small');n.text=None
+                            for i,label in enumerate(labels):
+                                span=ET.SubElement(n,'tspan',{'x':'165','dy':'0' if i==0 else '34'})
+                                span.text=label
+                    else:n.set('y',str(axis-y))
+        result.append(ET.tostring(n,encoding='unicode'))
+    plate.items=result
+
+bottom_up(spine,100,2798)
+bottom_up(dense,105,608)
+bottom_up(msa,110,1142)
+bottom_up(moe,105,1098)
+
 # One path on the left, explanatory insets on the right. Dashed = magnification.
-placements=[(spine,60,150),(vision,1220,170),(norm,1220,760),
-            (dense,1220,1040),(msa,2200,1040),(moe,1220,1760)]
+placements=[(spine,60,150),(vision,1220,2520),(norm,1220,2220),
+            (dense,1220,1500),(msa,2200,720),(moe,1220,170)]
 full=[f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">',
       '<title>MiniMax-M3.1-Flash：一条主线与关键模块展开</title>',
       f'<rect width="{W}" height="{H}" fill="white"/>',STYLE,
       '<text x="1700" y="65" class="title" text-anchor="middle">MiniMax-M3.1-Flash · 主线与关键模块展开</text>',
-      '<text x="1700" y="115" class="body" text-anchor="middle">左侧实线：端到端数据流　｜　虚线：对应模块的放大说明　｜　层号从 0 开始</text>']
+      '<text x="1700" y="115" class="body" text-anchor="middle">自下向上：输入 → 合并 → 前 3 层 → 后 57 层 → 输出　｜　虚线为模块放大说明</text>']
 for plate,x,y in placements:
     full.append(f'<g transform="translate({x},{y})">'+"\n".join(plate.items)+'</g>')
 
 def zoom(points):
     full.append('<polyline points="'+' '.join(f'{x},{y}' for x,y in points)+'" fill="none" stroke="#8392a5" stroke-width="2" stroke-dasharray="9 7"/>')
 
-zoom([(1090,581),(1220,581)])                 # Vision tower → vision inset
-zoom([(860,993),(1140,993),(1140,875),(1220,875)]) # Norm → its shared explanation
-zoom([(860,1119),(1090,1119),(1090,1015),(2740,1015),(2740,1040)])
-zoom([(860,1414),(1220,1414)])                # Dense FFN → dense inset
-zoom([(860,2204),(1220,2204)])                # MoE → routed/shared inset
+zoom([(1090,2617),(1220,2617)])               # Vision tower → vision inset
+zoom([(860,2205),(1140,2205),(1140,2335),(1220,2335)])
+zoom([(860,1289),(1090,1289),(1090,1475),(2200,1475)])
+zoom([(860,1784),(1220,1784)])                # Dense FFN → dense inset
+zoom([(860,994),(1220,994)])                  # MoE → routed/shared inset
 full.append('<text x="60" y="3205" class="note">逻辑 shape，未切 TP/EP；W=[out,in]。GemmaRMSNorm / MSA / SwiGLU-OAI 均按 M3.1 配置与本地适配实现解释，非实际运行 trace。</text>')
 full.append('</svg>')
 (ROOT/'minimax-m31-detailed-architecture.svg').write_text('\n'.join(full),encoding='utf-8')

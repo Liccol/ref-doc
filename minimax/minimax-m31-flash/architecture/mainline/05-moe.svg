@@ -8,44 +8,44 @@ markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 <path d="M0 0L10 5L0 10Z" fill="#617186"/></marker></defs><rect x="1" y="1" width="898" height="1278" rx="18" fill="#fbfcfe" stroke="#4b853e" stroke-width="1.7"/>
 <text x="28" y="49" class="head" text-anchor="start">⑤ MoE：路由专家 + 无条件共享专家</text>
 <line x1="28" y1="75" x2="872" y2="75" stroke="#4b853e" opacity=".35"/>
-<rect x="230" y="105" width="440" height="68" rx="10" fill="#f0f7ec" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="412" x="450.0" y="140" class="node" text-anchor="middle">同一份 Z [N,6144]</text>
-<polyline points="450,173 450,205 235,205 235,240" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<polyline points="450,205 680,205 680,240" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<rect x="35" y="240" width="400" height="137" rx="10" fill="#f0f7ec" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="372" x="235.0" y="275" class="node" text-anchor="middle">Router Linear → sigmoid</text>
-<text data-max-width="372" x="235.0" y="310" class="body" text-anchor="middle">128 维得分，加 bias 选 Top-4</text>
-<text data-max-width="372" x="235.0" y="345" class="body" text-anchor="middle">IDs / weights 各 [N,4]</text>
-<rect x="485" y="240" width="380" height="137" rx="10" fill="#eaf7f4" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="352" x="675.0" y="275" class="node" text-anchor="middle">Shared Expert</text>
-<text data-max-width="352" x="675.0" y="310" class="body" text-anchor="middle">每个 token 都参与</text>
-<text data-max-width="352" x="675.0" y="345" class="body" text-anchor="middle">不占 Top-4 名额</text>
-<polyline points="235,377 235,420" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<rect x="35" y="420" width="400" height="137" rx="10" fill="#f0f7ec" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="372" x="235.0" y="455" class="node" text-anchor="middle">Dispatch → 选中的 4 个专家</text>
-<text data-max-width="372" x="235.0" y="490" class="body" text-anchor="middle">按 expert ID 分组计算</text>
-<text data-max-width="372" x="235.0" y="525" class="body" text-anchor="middle">共 4N 条 token-expert 任务</text>
-<polyline points="235,557 235,600" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<rect x="35" y="600" width="400" height="137" rx="10" fill="#f0f7ec" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="372" x="235.0" y="635" class="node" text-anchor="middle">Expert FFN</text>
-<text data-max-width="372" x="235.0" y="670" class="body" text-anchor="middle">gate/up → SwiGLUOAI → down</text>
-<text data-max-width="372" x="235.0" y="705" class="body" text-anchor="middle">6144 → 3072 → 6144</text>
-<polyline points="680,377 680,600" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<rect x="485" y="600" width="380" height="137" rx="10" fill="#eaf7f4" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="352" x="675.0" y="635" class="node" text-anchor="middle">Shared FFN</text>
-<text data-max-width="352" x="675.0" y="670" class="body" text-anchor="middle">gate/up → 激活 → down</text>
-<text data-max-width="352" x="675.0" y="705" class="body" text-anchor="middle">6144 → 3072 → 6144</text>
-<polyline points="235,737 235,780" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<rect x="35" y="780" width="400" height="137" rx="10" fill="#f0f7ec" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="372" x="235.0" y="815" class="node" text-anchor="middle">Combine：回收 + 加权求和</text>
-<text data-max-width="372" x="235.0" y="850" class="body" text-anchor="middle">R=2.0 × Σ rₖ·Expertₖ(Z)</text>
-<text data-max-width="372" x="235.0" y="885" class="body" text-anchor="middle">r 取原始 sigmoid 分数归一化</text>
-<circle cx="450" cy="970" r="20" fill="white" stroke="#617186" stroke-width="2"/>
-<text x="450" y="978" class="node" text-anchor="middle">+</text>
-<polyline points="235,917 235,970 430,970" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<polyline points="680,737 680,970 470,970" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<polyline points="450,990 450,1030" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<rect x="130" y="1030" width="640" height="68" rx="10" fill="#f0f7ec" stroke="#c9d4e0" stroke-width="1.7"/>
-<text data-max-width="612" x="450.0" y="1065" class="node" text-anchor="middle">F=R+Shared(Z) → [N,6144]</text>
+<rect x="230" y="1030.0" width="440" height="68" rx="10" fill="#f0f7ec" stroke="#c9d4e0" stroke-width="1.7" />
+<text data-max-width="412" x="450.0" y="1065.0" class="node" text-anchor="middle">同一份 Z [N,6144]</text>
+<polyline points="450.0,1030.0 450.0,998.0 235.0,998.0 235.0,963.0" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)" />
+<polyline points="450.0,998.0 680.0,998.0 680.0,963.0" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)" />
+<rect x="35" y="826.0" width="400" height="137" rx="10" fill="#f0f7ec" stroke="#c9d4e0" stroke-width="1.7" />
+<text data-max-width="372" x="235.0" y="861.0" class="node" text-anchor="middle">Router Linear → sigmoid</text>
+<text data-max-width="372" x="235.0" y="896.0" class="body" text-anchor="middle">128 维得分，加 bias 选 Top-4</text>
+<text data-max-width="372" x="235.0" y="931.0" class="body" text-anchor="middle">IDs / weights 各 [N,4]</text>
+<rect x="485" y="826.0" width="380" height="137" rx="10" fill="#eaf7f4" stroke="#c9d4e0" stroke-width="1.7" />
+<text data-max-width="352" x="675.0" y="861.0" class="node" text-anchor="middle">Shared Expert</text>
+<text data-max-width="352" x="675.0" y="896.0" class="body" text-anchor="middle">每个 token 都参与</text>
+<text data-max-width="352" x="675.0" y="931.0" class="body" text-anchor="middle">不占 Top-4 名额</text>
+<polyline points="235.0,826.0 235.0,783.0" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)" />
+<rect x="35" y="646.0" width="400" height="137" rx="10" fill="#f0f7ec" stroke="#c9d4e0" stroke-width="1.7" />
+<text data-max-width="372" x="235.0" y="681.0" class="node" text-anchor="middle">Dispatch → 选中的 4 个专家</text>
+<text data-max-width="372" x="235.0" y="716.0" class="body" text-anchor="middle">按 expert ID 分组计算</text>
+<text data-max-width="372" x="235.0" y="751.0" class="body" text-anchor="middle">共 4N 条 token-expert 任务</text>
+<polyline points="235.0,646.0 235.0,603.0" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)" />
+<rect x="35" y="466.0" width="400" height="137" rx="10" fill="#f0f7ec" stroke="#c9d4e0" stroke-width="1.7" />
+<text data-max-width="372" x="235.0" y="501.0" class="node" text-anchor="middle">Expert FFN</text>
+<text data-max-width="372" x="235.0" y="536.0" class="body" text-anchor="middle">gate/up → SwiGLUOAI → down</text>
+<text data-max-width="372" x="235.0" y="571.0" class="body" text-anchor="middle">6144 → 3072 → 6144</text>
+<polyline points="680.0,826.0 680.0,603.0" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)" />
+<rect x="485" y="466.0" width="380" height="137" rx="10" fill="#eaf7f4" stroke="#c9d4e0" stroke-width="1.7" />
+<text data-max-width="352" x="675.0" y="501.0" class="node" text-anchor="middle">Shared FFN</text>
+<text data-max-width="352" x="675.0" y="536.0" class="body" text-anchor="middle">gate/up → 激活 → down</text>
+<text data-max-width="352" x="675.0" y="571.0" class="body" text-anchor="middle">6144 → 3072 → 6144</text>
+<polyline points="235.0,466.0 235.0,423.0" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)" />
+<rect x="35" y="286.0" width="400" height="137" rx="10" fill="#f0f7ec" stroke="#c9d4e0" stroke-width="1.7" />
+<text data-max-width="372" x="235.0" y="321.0" class="node" text-anchor="middle">Combine：回收 + 加权求和</text>
+<text data-max-width="372" x="235.0" y="356.0" class="body" text-anchor="middle">R=2.0 × Σ rₖ·Expertₖ(Z)</text>
+<text data-max-width="372" x="235.0" y="391.0" class="body" text-anchor="middle">r 取原始 sigmoid 分数归一化</text>
+<circle cx="450" cy="233.0" r="20" fill="white" stroke="#617186" stroke-width="2" />
+<text x="450" y="241.0" class="node" text-anchor="middle">+</text>
+<polyline points="235.0,286.0 235.0,233.0 430.0,233.0" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)" />
+<polyline points="680.0,466.0 680.0,233.0 470.0,233.0" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)" />
+<polyline points="450.0,213.0 450.0,173.0" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)" />
+<rect x="130" y="105.0" width="640" height="68" rx="10" fill="#f0f7ec" stroke="#c9d4e0" stroke-width="1.7" />
+<text data-max-width="612" x="450.0" y="140.0" class="node" text-anchor="middle">F=R+Shared(Z) → [N,6144]</text>
 <text x="450" y="1160" class="small" text-anchor="middle">语言和视觉 token 均走两条分支。</text>
 <text x="450" y="1205" class="small" text-anchor="middle">Dense / MoE 的区别在 FFN；二者的 Attention 都是 MSA。</text></svg>
