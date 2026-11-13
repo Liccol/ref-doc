@@ -50,4 +50,4 @@ markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 <polyline points="1740,487 1740,530 520,530 520,575" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
 <polyline points="1000,663 1160,663" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
 <polyline points="2240,663 2390,663" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
-<text x="40" y="800" class="small" text-anchor="start">层内权重和 KV 内容各层独立；同构层只展开一次。positions / 长度 / slot_mapping / block_table 随请求传入，见 04、07。</text></svg>
+<text x="40" y="800" class="small" text-anchor="start">层内权重和 KV 内容各层独立；同构层只展开一次。positions / 长度 / slot_mapping / block_table 随请求传入，见 04。</text></svg>

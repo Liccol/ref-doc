@@ -4,7 +4,7 @@ MiniMax-M3.1-Flash 是包含视觉编码器的自回归 MoE 语言模型。文�
 
 ## 详细版：全层级、入参、Shape 与内部流转
 
-[完整高清 PNG（5400×11805）](minimax-m31-detailed-architecture.png) · [可编辑 SVG，可无限放大](minimax-m31-detailed-architecture.svg) · [七张分区图逐一阅读](detailed/README.md) · [详细版绘图源码](draw_detailed.py) · [整体与两类层布局](detailed_sections.py)
+[完整高清 PNG（5400×10440）](minimax-m31-detailed-architecture.png) · [可编辑 SVG，可无限放大](minimax-m31-detailed-architecture.svg) · [六张分区图逐一阅读](detailed/README.md) · [详细版绘图源码](draw_detailed.py) · [整体与两类层布局](detailed_sections.py)
 
 ![详细架构图预览：入参、MSA、主干残差、FFN、视觉与缓存时序](detailed/overview-preview.png)
 

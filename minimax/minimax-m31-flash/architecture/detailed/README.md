@@ -1,6 +1,6 @@
 # MiniMax-M3.1-Flash：先看整体，再看 token 在层内怎么走
 
-修订日期：2026-11-13。[完整高清图 5400×11805](../minimax-m31-detailed-architecture.png) · [可编辑 SVG](../minimax-m31-detailed-architecture.svg) · [公式、shape 与数值例子](../../model_analyze.md)
+修订日期：2026-11-13。[完整高清图 5400×10440](../minimax-m31-detailed-architecture.png) · [可编辑 SVG](../minimax-m31-detailed-architecture.svg) · [公式、shape 与数值例子](../../model_analyze.md)
 
 ## 01 整体顺序：视觉塔先编码，合流后进入 60 层
 
@@ -64,16 +64,10 @@ MSA 决定一个 token 从哪些历史位置获取信息；Dense/MoE 决定一�
 
 ![独立视觉塔和视觉语言融合](06-vision.png)
 
-## 07 连续 decode 与 cache 更新
-
-保留 prefill 之后两轮 decode 的输入、位置、缓存长度与采样时序，以及分页地址和可选 DSpark 分支。刚采样的 ID 要在下一轮前向中才写入对应 KV。
-
-[SVG](07-runtime.svg)
-
-![连续 decode、缓存与独立草稿分支](07-runtime.png)
+decode、分页缓存时序与可选 DSpark 保留在[文字详解](../../model_analyze.md)第 10、11、15 节，不纳入本图。
 
 ## 来源与重建
 
 模型配置与 header 依据 [sources](../sources/README.md)。语言与 MSA 来自 ycl 的 Ascend 实现，视觉等共用模块来自上游 vLLM；具体提交、注册链与 M3.1 配置分支见[来源说明](../../model_analyze.md#162-本工作区实现)。静态结构分析未执行全量模型，图中的数值和选块示意不是实测激活。
 
-在 `architecture` 目录运行 `python draw_detailed.py --png` 重建 SVG 和 PNG；PNG 导出依赖已安装的 Chrome/Edge 和 Pillow。`detailed_sections.py` 定义整体顺序、两类代表层和对比图；`layout.json` 保存七个分区坐标。
+在 `architecture` 目录运行 `python draw_detailed.py --png` 重建 SVG 和 PNG；PNG 导出依赖已安装的 Chrome/Edge 和 Pillow。`detailed_sections.py` 定义整体顺序、两类代表层和对比图；`layout.json` 保存六个分区坐标。

@@ -16,7 +16,7 @@ def build_sections(Plate, colors):
     p.box(2390, 575, 1050, ["Final Norm → LM Head → 采样", "选定位置 [R,6144] → logits [R,200064]", "采样新语言 token ID → 下一轮 Embedding", "普通生成 R=B；全位置输出 R=N"], 177)
     p.arrow([(1740, 487), (1740, 530), (520, 530), (520, 575)])
     p.arrow([(1000, 663), (1160, 663)]); p.arrow([(2240, 663), (2390, 663)])
-    p.text(40, 800, "层内权重和 KV 内容各层独立；同构层只展开一次。positions / 长度 / slot_mapping / block_table 随请求传入，见 04、07。", "small")
+    p.text(40, 800, "层内权重和 KV 内容各层独立；同构层只展开一次。positions / 长度 / slot_mapping / block_table 随请求传入，见 04。", "small")
     overview = p
 
     def layer_prefix(p, center, left, width, family):

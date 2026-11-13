@@ -1,6 +1,6 @@
 {
   "width": 3600,
-  "height": 7870,
+  "height": 6960,
   "plates": [
     {
       "name": "01-overview",
@@ -43,13 +43,6 @@
       "y": 5310,
       "width": 3480,
       "height": 1450
-    },
-    {
-      "name": "07-runtime",
-      "x": 60,
-      "y": 6810,
-      "width": 3480,
-      "height": 930
     }
   ]
 }

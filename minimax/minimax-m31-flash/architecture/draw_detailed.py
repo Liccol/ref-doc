@@ -137,28 +137,16 @@ p.box(1795, 960, 1650, ["视频教学例：已采样/补齐 8 帧，处理后每
 p.box(35, 1190, 3410, ["层级覆盖：视觉 Patch Embed ×1 → Pre LN ×1 → Vision Transformer ×32 → Projector ×1 → Merger ×1 → 文本 60 层 → Final Norm → LM Head", "图中的 Nv/4 与 576 都是视觉内容向量数量；实际 dynamic resolution 以 grid 为准，672 不代表固定输入尺寸。", "视频/图片在 prefill 时变成语言前缀；正常后续 decode 复用语言 KV cache，通常不逐 token 重跑同一份视觉输入。"], 137, "#f3f6fa")
 vision = p
 
-# Runtime and optional branch, linked to the same input/output objects.
-p = Plate("07-runtime", 3480, 930, "07 逐 token 轮转、cache 地址与可选 DSpark：参数不变，激活与状态推进", "red")
-p.box(35, 110, 740, ["Prefill：B=2，S=256，P=0", "IDs [2,256] → 打包 [512]", "hidden [512,6144]；每请求缓存长 256", "末位置 logits [2,200064]", "采样第 257 个 ID，尚未写入其 KV"], 212)
-p.box(905, 110, 740, ["Decode 1：P=256，S=1", "输入刚采样的 ID [2,1]，position=256", "hidden [2,6144]；本轮 K/V 各 [2,4,128]", "每层缓存长度 256 → 257，逻辑块 2 → 3", "采样第 258 个 ID，下一轮再进入缓存"], 212)
-p.box(1775, 110, 740, ["Decode 2：P=257，S=1", "输入第 258 个 ID，position=257", "hidden [2,6144]；Q [2,64,128]", "每层缓存长度 257 → 258；当前块仍为 2", "重复 60 层 → logits → 第 259 个 ID"], 212)
-p.box(2645, 110, 800, ["新 token 的下一轮闭环", "采样 ID → Embedding → 60 层", "新 K/V 写槽 → index 选块 → attention", "旧 Q 不缓存；旧 K/V 不逐轮重算", "未选旧块保留，后续 query 可重新选中"], 212)
-for a,b in [(775,905),(1645,1775),(2515,2645)]:p.arrow([(a,216),(b,216)])
-p.box(35, 380, 1610, ["分页地址例：假设 cache 页也为 128 token", "block_table=[9,2,15]；逻辑位置 256 → 第 2 块、offset 0", "物理页=15；slot=15×128+0=1920；位置 257 写 slot 1921", "每层每历史 token：K 512 + V 512 + index K 128 = 1152 标量", "若三类皆 BF16：60 层共 135 KiB/token；未含页尾、scale 与工作区", ("MSA 选择块=128 与 allocator 物理页是不同概念，不保证所有后端相同", "weight")], 247)
-p.box(1775, 380, 1670, ["可选 DSpark 草稿分支：不属于 target 的第 61–65 层", "target 层 [3,17,31,45,59] hidden，各 [N,6144]", "拼接 [N,30720] → fc W [6144,30720] → [N,6144]", "Draft ×5：64/4 heads ×128；Dense I=12288；sliding window=4096", "Markov rank=256；confidence W [1,6400]；block_size=7", ("候选 → target 验证 → 接受部分并推进/回退状态；7 不等于每步必接收 7 token", "weight")], 247, COLORS["blue"][1])
-p.box(35, 685, 3410, ["读图约定：激活 shape 默认全局逻辑维度；Linear 权重为 [out,in]，计算 X·Wᵀ；不同层独立权重、独立 KV 内容。", "TP/EP/量化会改变本地或文件布局：如 TP=4 的五路投影本地宽度为 2560；NVFP4 的单 expert W1 逻辑 [3072,6144]，U8 打包 [3072,3072]。", "实线为本区数据流；折线路径为分支/残差；编号为跨区模块引用。本图按固定配置与本地实现静态核验，示例不是模型真实激活。", "来源：HF ce7f4df87d2e05262f5775f373dac4772f134041；architecture/sources 配置与 73 项 header 抽样；公式和来源详见 model_analyze.md。"], 177, "#f3f6fa")
-runtime = p
-
 from detailed_sections import build_sections
 
 overview, dense, moe, features = build_sections(Plate, COLORS)
-plates = [overview, dense, moe, msa, features, vision, runtime]
+plates = [overview, dense, moe, msa, features, vision]
 for p in plates:
     (OUT / f"{p.name}.svg").write_text(p.render(), encoding="utf-8")
 
 placements = [(overview,60,170),(dense,60,1050),(moe,1540,1050),
-              (msa,60,3320),(features,1240,3320),(vision,60,5310),(runtime,60,6810)]
-W,H=3600,7870
+              (msa,60,3320),(features,1240,3320),(vision,60,5310)]
+W,H=3600,6960
 full=[f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img">',
       '<title>MiniMax-M3.1-Flash：整体顺序、Dense 与 MoE 层、MSA 及视觉塔</title>',
       f'<rect width="{W}" height="{H}" fill="white"/>',STYLE,
@@ -166,7 +154,9 @@ full=[f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox
       '<text x="1800" y="116" class="body" text-anchor="middle">视觉塔先编码并合入语言序列 → 3 层 MSA + Dense FFN → 57 层 MSA + MoE → 输出；同构层只展开一次</text>']
 for p,x,y in placements:
     full.append(f'<g transform="translate({x},{y})">'+"\n".join(p.items)+"</g>")
-full.append('<text x="60" y="7815" class="note">2026-11-13 · 可编辑 SVG / 高清 PNG / 分区图；W 为参数，X/H/Q/K/V 为激活；参数不随普通推理轮次更新。</text></svg>')
+full.append('<text x="60" y="6820" class="note">2026-11-13 · 可编辑 SVG / 高清 PNG / 分区图；W 为参数，X/H/Q/K/V 为激活；参数不随普通推理轮次更新。</text>'
+            '<text x="60" y="6860" class="note">维度为未分片逻辑 shape；Linear W=[out,in]，计算 X·Wᵀ。运行时缓存时序与可选 DSpark 见 model_analyze.md。</text>'
+            '<text x="60" y="6900" class="note">来源：HF 固定 revision ce7f4df87d2e05262f5775f373dac4772f134041 及本地适配实现；静态解释，无本次模型实测激活。</text></svg>')
 (ROOT / "minimax-m31-detailed-architecture.svg").write_text("\n".join(full),encoding="utf-8")
 (OUT / "layout.json").write_text(json.dumps({"width":W,"height":H,"plates":[{"name":p.name,"x":x,"y":y,"width":p.w,"height":p.h} for p,x,y in placements]},indent=2)+"\n",encoding="utf-8")
 print(f"Generated full SVG and {len(plates)} detail plates in {ROOT}")
