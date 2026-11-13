@@ -27,5 +27,7 @@
 - [v1.0.21](packed-tensor-design-v1.0.21.md)：明确 `PackedIpcChunk` 可适配，并解释零元素 chunk 的 yield。
 - [v1.0.22](packed-tensor-design-v1.0.22.md)：记录硬件扩展与语义修复的初步上游建议。
 - [v1.0.23](packed-tensor-design-v1.0.23.md)：上游建议收敛为三个 IPC 硬件扩展点。
+- [v1.0.24](packed-tensor-design-v1.0.24.md)：移除步骤标签，直接标注 producer 差异。
+- [v1.0.25](packed-tensor-design-v1.0.25.md)：主文档精简后，合并时序图单独成页。
 
 [当前版本](../packed-tensor-design.md) · [版本记录](../CHANGELOG.md)
