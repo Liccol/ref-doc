@@ -6,7 +6,7 @@ MiniMax-M3.1-Flash 是包含视觉编码器的自回归 MoE 语言模型。文�
 
 [完整高清 PNG（5100×4890）](minimax-m31-detailed-architecture.png) · [可编辑 SVG](minimax-m31-detailed-architecture.svg) · [主线与五张模块小图](mainline/README.md) · [绘图源码](draw_mainline.py)
 
-[独立图：MSA 与 DSA 的 Index Branch / Main Branch 对照](msa-vs-dsa.md)：用等预算的选点/选块示意讲清 token 与 block 粒度，以及跨头共享与按 GQA 组共享的区别。
+[独立图：MSA 与 DSA 的 Index Branch 对照](msa-vs-dsa.md)：只展示索引投影、评分、Top-K 和索引输出，比较 token 与 block 的选择粒度，不展开后续主注意力。
 
 ![单一主线及关键模块小图](mainline/preview.png)
 
