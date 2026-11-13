@@ -6,7 +6,7 @@ text{font-family:'Microsoft YaHei','Noto Sans CJK SC',Arial,sans-serif;fill:#223
 </style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
 markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 <path d="M0 0L10 5L0 10Z" fill="#617186"/></marker></defs><rect x="1" y="1" width="1078" height="1448" rx="18" fill="#fbfcfe" stroke="#b9741d" stroke-width="1.7"/>
-<text x="28" y="49" class="head" text-anchor="start">③ MSA：参考论文 Figure 1 的双分支结构</text>
+<text x="28" y="49" class="head" text-anchor="start">③ MSA：Index Branch 选块，Main Branch 计算</text>
 <line x1="28" y1="75" x2="1052" y2="75" stroke="#b9741d" opacity=".35"/>
 <rect x="20" y="220" width="1040" height="820" rx="18" fill="#f7f7f7" stroke="#adb4bb" stroke-width="1.7"/>
 <text x="50" y="247" class="node" text-anchor="start">Index Branch</text>

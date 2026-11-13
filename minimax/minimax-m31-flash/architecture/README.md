@@ -6,6 +6,8 @@ MiniMax-M3.1-Flash 是包含视觉编码器的自回归 MoE 语言模型。文�
 
 [完整高清 PNG（5100×4890）](minimax-m31-detailed-architecture.png) · [可编辑 SVG](minimax-m31-detailed-architecture.svg) · [主线与五张模块小图](mainline/README.md) · [绘图源码](draw_mainline.py)
 
+[独立图：MSA 与 DSA 的 Index Branch / Main Branch 对照](msa-vs-dsa.md)：用等预算的选点/选块示意讲清 token 与 block 粒度，以及跨头共享与按 GQA 组共享的区别。
+
 ![单一主线及关键模块小图](mainline/preview.png)
 
 参考 [InfraTech MiniMax-M2.5 图](https://github.com/CalvinXKY/InfraTech/blob/main/models/minimax_m_2_5/minimax_m_2_5_architecture.jpg)的主线与模块放大布局，重新绘制 M3.1：左侧端到端链路**从下向上**阅读，底部输入经文本分词/Embedding 与视觉预处理/视觉塔两路合并；随后向上连续通过前三层、后 57 层、最终归一化和输出。重复层框内只列 GemmaRMSNorm、Attention、Dense FFN / MoE 与残差；虚线连接右侧五张模块小图。右侧纵向计算也统一向上，视觉横向小图仍向右。参考图仅作为布局参考，模型参数与模块按 M3.1 配置和本地适配实现核验。

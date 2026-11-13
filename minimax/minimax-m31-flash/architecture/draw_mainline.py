@@ -73,7 +73,7 @@ p.text(50,177,'层内沿最后 6144 维计算；主 Q/K 和 index Q/K 则每 hea
 norm=p
 
 # MSA inset follows Figure 1 of arXiv:2606.13392v2, redrawn as SVG.
-p=Plate('03-attention-msa',1080,1450,'③ MSA：参考论文 Figure 1 的双分支结构','orange')
+p=Plate('03-attention-msa',1080,1450,'③ MSA：Index Branch 选块，Main Branch 计算','orange')
 p.rect(20,220,1040,820,'#f7f7f7','#adb4bb',18)
 p.text(50,247,'Index Branch','node')
 p.text(590,247,'Main Branch','node')
