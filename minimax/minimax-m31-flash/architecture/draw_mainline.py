@@ -23,6 +23,7 @@ p.box(90,380,450,['Embedding','token ID → 6144 维向量'],102,COLORS['blue'][
 p.box(650,380,380,['视觉塔 ①','→ 6144 维视觉向量'],102,COLORS['teal'][1])
 p.arrow([(315,482),(315,530),(540,530),(540,560)])
 p.arrow([(840,482),(840,530),(540,530)])
+p.items[-1]=p.items[-1].replace(' marker-end="url(#arrow)"','')
 p.box(180,560,720,['按占位位置合并为一条序列','语言向量 + 视觉向量 → X [N,6144]'],102)
 p.down(540,662,720)
 
@@ -30,12 +31,14 @@ def decoder(top,title,ffn,label):
     # Neutral dashed outline is a repeat marker, rather than a second flow.
     p.items.append(f'<rect x="180" y="{top}" width="720" height="730" rx="16" fill="none" stroke="#98a4b5" stroke-width="2" stroke-dasharray="10 7"/>')
     p.text(540,top+43,title,'node','middle')
+    p.arrow([(540,top),(540,top+70)])
+    p.items[-1]=p.items[-1].replace(' marker-end="url(#arrow)"','')
     for dy,txt,color in [(90,'GemmaRMSNorm ②','purple'),(215,'Attention / MSA ③','orange'),(385,'GemmaRMSNorm ②','purple'),(510,ffn+' '+label,'green')]:
         p.box(280,top+dy,520,[txt],68,COLORS[color][1])
     for y1,y2 in [(top+70,top+90),(top+158,top+215),(top+283,top+325),(top+365,top+385),(top+453,top+510),(top+578,top+630)]:p.down(540,y1,y2)
     p.add(540,top+345);p.add(540,top+650)
     p.arrow([(540,top+70),(225,top+70),(225,top+345),(520,top+345)])
-    p.arrow([(540,top+365),(255,top+365),(255,top+650),(520,top+650)])
+    p.arrow([(540,top+365),(225,top+365),(225,top+650),(520,top+650)])
     p.down(540,top+670,top+730)
 
 decoder(720,'前三层：层 0–2，重复 ×3','Dense FFN','④')
