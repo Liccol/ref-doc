@@ -64,5 +64,3 @@ class Plate:
         return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{self.w}" height="{self.h}" '
                 f'viewBox="0 0 {self.w} {self.h}" role="img"><title>{escape(self.name)}</title>'
                 f'<rect width="{self.w}" height="{self.h}" fill="white"/>{STYLE}{body}</svg>')
-
-
