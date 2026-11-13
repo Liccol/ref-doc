@@ -22,5 +22,9 @@
 - [v1.0.17](packed-tensor-design-v1.0.17.md)
 - [v1.0.18 前检视修订快照](packed-tensor-design-before-v1.0.18.md)：v1.0.17 后的正文，原稿未标独立版本；保留其当时的测试状态，不覆盖 v1.0.17。
 - [v1.0.18](packed-tensor-design-v1.0.18.md)：按职责整理设计，分离双配套验证说明。
+- [v1.0.19](packed-tensor-design-v1.0.19.md)：四组方法的修改前时序对照及适配说明。
+- [v1.0.20](packed-tensor-design-v1.0.20.md)：统一 HCCL producer 图示，展开适配器通信保序。
+- [v1.0.21](packed-tensor-design-v1.0.21.md)：明确 `PackedIpcChunk` 可适配，并解释零元素 chunk 的 yield。
+- [v1.0.22](packed-tensor-design-v1.0.22.md)：记录硬件扩展与语义修复的初步上游建议。
 
 [当前版本](../packed-tensor-design.md) · [版本记录](../CHANGELOG.md)

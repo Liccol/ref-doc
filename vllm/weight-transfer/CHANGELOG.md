@@ -1,5 +1,31 @@
 # Packed tensor 文档版本记录
 
+## v1.0.23（2026-11-13）
+
+- 第 7 章收敛为 IPC 硬件扩展点，仅保留 producer device、consumer 显式 handle key 和 importer 重建函数注入，以及对应兼容/验证要求。
+- 移除第 7 章零元素 metadata 与 clone-first 解包的上游修改建议；这些 NPU/GPU 差异继续保留在第 4 章的现状说明中。
+- 未修改生产代码或测试结果，保留 v1.0.22 脱敏快照。
+
+## v1.0.22（2026-11-13）
+
+- 按当前约定保留现有实现、时序和解包差异说明，只新增“建议提交给 vLLM 的修改”，不实施 Ascend 侧 uint8 参数转换或生产代码改动。
+- 提出三个待评审上游 PR：IPC device/显式设备标识/importer 重建扩展点、零元素 metadata 发送修复、clone-first 未对齐解包修复；列出默认行为兼容、接口草案、替代选项和验证要求。
+- 区分扩展点与正确性修复，不将这些改动混入 #20676，也不将既有 UT/E2E 结果视为新方案的验证证据。归档 v1.0.21 脱敏快照。
+
+## v1.0.21（2026-11-13）
+
+- 明确 `PackedIpcChunk` 是可直接 import 复用的纯数据 dataclass，dict 只是当前 NPU producer 的本地返回类型，不构成复用障碍。
+- 根据 trainer `_send_packed` 调用链修正“更换类型需要协调两端协议”的说法：chunk 在本地拆字段，保持 `_do_send` 参数契约即可；列出字段访问、调用方和测试的适配范围，未修改源码。
+- 解释生成器 `yield` 的暂停/恢复及共享 handle 语义，用零元素 tensor 示例区分 `if total_bytes` 与 `if names`，避免将“无元素”误解为“数值全为零”。
+- 归档 v1.0.20 脱敏设计快照；测试结果不变，没有新增硬件测试。
+
+## v1.0.20（2026-11-13）
+
+- 统一 HCCL producer 两张修改前时序图的参与者和打包抽象层次，以 P1～P6 对齐共同流程，避免把 helper 拆分差异误读为主要流程差异。
+- 在图后区分当前 slot 等待与跨 slot 通信保序：上游循环没有旧 Ascend 的显式 `previous_broadcast_stream` 等待，不能据此直接省略 HCCL 侧保护。
+- 新增当前 PR 的 producer 适配时序图，展开 transport 的前同步、native HCCL 调用与后同步，说明同一次调用中前次通信完成后主机才进入下一 chunk；保序位置迁移，打包/通信重叠机会可能减少，尚无性能测量结论。
+- 明确当前结论不覆盖并发共享 communicator 或源 tensor 的 caller-stream 依赖。仅调整文档，源码和既有验证结果不变；保留 v1.0.19 脱敏快照。
+
 ## v1.0.19（2026-11-12）
 
 - 按 HCCL/IPC × producer/consumer 四个方法增加八张修改前时序图，固定对照 vLLM main `24420b7a` 和 Ascend 历史基线 `37854b83`，与当前 PR `870b61a90` 明确区分。
