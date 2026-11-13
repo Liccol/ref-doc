@@ -16,69 +16,7 @@ T = CONFIG["text_config"]
 assert (T["hidden_size"], T["num_hidden_layers"], T["head_dim"]) == (6144, 60, 128)
 assert sum(T["moe_layer_freq"]) == 57
 
-COLORS = {"purple": ("#7758a6", "#f3eef9"), "orange": ("#b9741d", "#fff5e5"),
-          "green": ("#4b853e", "#f0f7ec"), "teal": ("#237e76", "#eaf7f4"),
-          "red": ("#ad5a53", "#fff0ee"), "blue": ("#447da5", "#eef5fb")}
-STYLE = """<style>
-text{font-family:'Microsoft YaHei','Noto Sans CJK SC',Arial,sans-serif;fill:#22364c}
-.title{font-size:44px;font-weight:700}.head{font-size:31px;font-weight:700}
-.node{font-size:25px;font-weight:600}.body{font-size:24px}.small{font-size:22px}
-.weight{font-size:22px;fill:#59677a}.note{font-size:22px;fill:#59677a}
-</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
-markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-<path d="M0 0L10 5L0 10Z" fill="#617186"/></marker></defs>"""
-
-
-class Plate:
-    def __init__(self, name, w, h, title, color):
-        self.name, self.w, self.h = name, w, h
-        self.stroke, self.fill = COLORS[color]
-        self.items = []
-        self.text_bounds = []
-        self.rect(1, 1, w - 2, h - 2, "#fbfcfe", self.stroke, 18)
-        self.text(28, 49, title, "head")
-        self.items.append(f'<line x1="28" y1="75" x2="{w-28}" y2="75" stroke="{self.stroke}" opacity=".35"/>')
-
-    def rect(self, x, y, w, h, fill, stroke="#c9d4e0", radius=10):
-        assert 0 <= x and 0 <= y and x + w <= self.w and y + h <= self.h
-        self.items.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{radius}" fill="{fill}" stroke="{stroke}" stroke-width="1.7"/>')
-
-    def text(self, x, y, text, cls="body", anchor="start"):
-        assert 0 <= x <= self.w and 0 <= y <= self.h
-        self.items.append(f'<text x="{x}" y="{y}" class="{cls}" text-anchor="{anchor}">{escape(text)}</text>')
-        self.text_bounds.append((x, y, text, cls, anchor))
-
-    def box(self, x, y, w, lines, h=None, fill=None):
-        h = h or (35 * len(lines) + 28)
-        self.rect(x, y, w, h, fill or self.fill)
-        for i, line in enumerate(lines):
-            if isinstance(line, tuple):
-                label, cls = line
-            else:
-                label, cls = line, "node" if i == 0 else "body"
-            self.text(x + w / 2, y + 35 + i * 35, label, cls, "middle")
-            self.items[-1] = self.items[-1].replace('<text ', f'<text data-max-width="{w-28}" ')
-        return y + h
-
-    def arrow(self, points, dashed=False):
-        for x, y in points:
-            assert 0 <= x <= self.w and 0 <= y <= self.h
-        coords = " ".join(f"{x},{y}" for x, y in points)
-        dash = ' stroke-dasharray="8 6"' if dashed else ""
-        self.items.append(f'<polyline points="{coords}" fill="none" stroke="#617186" stroke-width="2.2"{dash} marker-end="url(#arrow)"/>')
-
-    def down(self, x, y1, y2):
-        self.arrow([(x, y1), (x, y2)])
-
-    def add(self, x, y):
-        self.items.append(f'<circle cx="{x}" cy="{y}" r="20" fill="white" stroke="#617186" stroke-width="2"/>')
-        self.text(x, y + 8, "+", "node", "middle")
-
-    def render(self):
-        body = "\n".join(self.items)
-        return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{self.w}" height="{self.h}" '
-                f'viewBox="0 0 {self.w} {self.h}" role="img"><title>{escape(self.name)}</title>'
-                f'<rect width="{self.w}" height="{self.h}" fill="white"/>{STYLE}{body}</svg>')
+from diagram_primitives import COLORS, STYLE, Plate
 
 
 # MSA plate: explicit independent projections and cached/indexed paths.
@@ -157,7 +95,7 @@ for p,x,y in placements:
 full.append('<text x="60" y="6820" class="note">2026-11-13 · 可编辑 SVG / 高清 PNG / 分区图；W 为参数，X/H/Q/K/V 为激活；参数不随普通推理轮次更新。</text>'
             '<text x="60" y="6860" class="note">维度为未分片逻辑 shape；Linear W=[out,in]，计算 X·Wᵀ。运行时缓存时序与可选 DSpark 见 model_analyze.md。</text>'
             '<text x="60" y="6900" class="note">来源：HF 固定 revision ce7f4df87d2e05262f5775f373dac4772f134041 及本地适配实现；静态解释，无本次模型实测激活。</text></svg>')
-(ROOT / "minimax-m31-detailed-architecture.svg").write_text("\n".join(full),encoding="utf-8")
+(ROOT / "minimax-m31-expanded-reference.svg").write_text("\n".join(full),encoding="utf-8")
 (OUT / "layout.json").write_text(json.dumps({"width":W,"height":H,"plates":[{"name":p.name,"x":x,"y":y,"width":p.w,"height":p.h} for p,x,y in placements]},indent=2)+"\n",encoding="utf-8")
 print(f"Generated full SVG and {len(plates)} detail plates in {ROOT}")
 
@@ -176,7 +114,7 @@ def render_png():
     browser = next((b for b in choices if b.exists()), None)
     if browser is None:
         raise RuntimeError("PNG export requires installed Chrome or Edge; SVGs were generated.")
-    svg = (ROOT / "minimax-m31-detailed-architecture.svg").read_text(encoding="utf-8")
+    svg = (ROOT / "minimax-m31-expanded-reference.svg").read_text(encoding="utf-8")
     script = """<script>const bad=[];
 document.querySelectorAll('text[data-max-width]').forEach(t=>{
 if(t.getBBox().width>+t.dataset.maxWidth)bad.push({text:t.textContent,width:t.getBBox().width,max:+t.dataset.maxWidth})});
@@ -187,7 +125,7 @@ const pre=document.createElement('pre');pre.id='qa';pre.textContent=JSON.stringi
         page.write_text('<!doctype html><meta charset="utf-8"><style>body{margin:0;background:white}</style>'+svg+script, encoding="utf-8")
         command = [str(browser), "--headless", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--disable-extensions",
                    "--user-data-dir="+str(work / "profile"), "--force-device-scale-factor=1.5",
-                   f"--window-size={W},{H}", "--screenshot="+str(ROOT / "minimax-m31-detailed-architecture.png"),
+                   f"--window-size={W},{H}", "--screenshot="+str(ROOT / "minimax-m31-expanded-reference.png"),
                    "--dump-dom", page.as_uri()]
         result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", timeout=60,
                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
@@ -196,7 +134,7 @@ const pre=document.createElement('pre');pre.id='qa';pre.textContent=JSON.stringi
         match = re.search(r'<pre id="qa">(.*?)</pre>', result.stdout, re.S)
         assert match, "Browser text-layout QA did not complete"
         assert not json.loads(html.unescape(match.group(1))), match.group(1)
-    image = Image.open(ROOT / "minimax-m31-detailed-architecture.png")
+    image = Image.open(ROOT / "minimax-m31-expanded-reference.png")
     assert image.size == (round(W*1.5), round(H*1.5)), image.size
     scale = image.width / W
     for plate, x, y in placements:

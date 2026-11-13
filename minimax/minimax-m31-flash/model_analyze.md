@@ -6,6 +6,8 @@
 
 配合[现有模型结构图](architecture/README.md)阅读。第 1～7 节是逐层 shape 速查，第 8～10 节解释输入、数值变化和完整算例，第 11～15 节展开缓存、视觉、并行、量化与 DSpark。除特别注明，shape 均为**未切 TP/EP、未量化打包的逻辑形状**。
 
+当前首选图为[单一主线 + 模块展开](architecture/mainline/README.md)：左侧贯穿输入、Tokenizer、Embedding/视觉塔合并、前 3 层、后 57 层及输出，右侧五张小图由对应关键模块引出；以下大分区图作为扩展资料保留。
+
 2026-11-13 图解修订：[整体执行顺序](architecture/detailed/01-overview.png) → [前 3 层 Dense](architecture/detailed/02-dense-layer.png) / [后 57 层 MoE](architecture/detailed/03-moe-layer.png)；[MSA 特征与 FFN 对比](architecture/detailed/05-msa-features-and-ffn.png)单独解释两个不同的“稀疏”。视觉塔先生成同宽视觉向量，再按占位位置与语言向量合成同一序列；进入 MoE 后，两类位置都同时进入 router 和共享分支，不按模态固定分路。
 
 先区分三个对象：**模型参数**是训练得到的权重，推理时通常保持数值和 shape 不变；**激活张量**是输入经过每步运算得到的中间值；**运行时状态**包括 KV cache、位置、块表和路由索引，会随请求推进而更新。下文所谓“轮转”主要指后两者的数据流与状态变化。

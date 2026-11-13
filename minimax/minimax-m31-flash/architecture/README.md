@@ -2,13 +2,15 @@
 
 MiniMax-M3.1-Flash 是包含视觉编码器的自回归 MoE 语言模型。文本主干共 60 层，所有层使用 MiniMax Sparse Attention（MSA）；前 3 层采用 Dense FFN，后 57 层采用 128 专家、每 token 选择 4 个路由专家及 1 个共享专家的 MoE。图示按官方模型配置和本工作区适配实现整理，不以硬件 profiling 反推模型结构。
 
-## 详细版：全层级、入参、Shape 与内部流转
+## 主线版：端到端链路与关键模块展开
 
-[完整高清 PNG（5400×10440）](minimax-m31-detailed-architecture.png) · [可编辑 SVG，可无限放大](minimax-m31-detailed-architecture.svg) · [六张分区图逐一阅读](detailed/README.md) · [详细版绘图源码](draw_detailed.py) · [整体与两类层布局](detailed_sections.py)
+[完整高清 PNG（5100×4890）](minimax-m31-detailed-architecture.png) · [可编辑 SVG](minimax-m31-detailed-architecture.svg) · [主线与五张模块小图](mainline/README.md) · [绘图源码](draw_mainline.py)
 
-![详细架构图预览：入参、MSA、主干残差、FFN、视觉与缓存时序](detailed/overview-preview.png)
+![单一主线及关键模块小图](mainline/preview.png)
 
-2026-11-13 版先讲整体执行顺序，再分别展开前 3 层、后 57 层、MSA 及独立视觉塔。同构层只展开一次，各层权重与缓存内容独立。语言与视觉向量合并后一起进入主干；MoE 图明确画出路由分支、共享分支及两次汇合。MSA 增加四组历史块的 Top-16 选取示意，并将“稀疏 attention”与“专家稀疏 FFN”区分。原始总览图保留如下。
+参考 [InfraTech MiniMax-M2.5 图](https://github.com/CalvinXKY/InfraTech/blob/main/models/minimax_m_2_5/minimax_m_2_5_architecture.jpg)的主线与模块放大布局，重新绘制 M3.1：左侧一条端到端链路，输入阶段文本分词/Embedding 与视觉预处理/视觉塔两路合并；随后连续通过前三层、后 57 层、最终归一化和输出。重复层框内只列 GemmaRMSNorm、Attention、Dense FFN / MoE 与残差；虚线连接右侧五张模块小图。参考图仅作为布局参考，模型参数与模块按 M3.1 配置和本地适配实现核验。
+
+更完整的 shape 表和大分区资料仍见[文字详解](../model_analyze.md)与[扩展分区图](detailed/README.md)。原始总览图保留如下。
 
 ## 整体架构
 

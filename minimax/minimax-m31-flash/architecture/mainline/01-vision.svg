@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2060" height="540" viewBox="0 0 2060 540" role="img"><title>01-vision</title><rect width="2060" height="540" fill="white"/><style>
+text{font-family:'Microsoft YaHei','Noto Sans CJK SC',Arial,sans-serif;fill:#22364c}
+.title{font-size:44px;font-weight:700}.head{font-size:31px;font-weight:700}
+.node{font-size:25px;font-weight:600}.body{font-size:24px}.small{font-size:22px}
+.weight{font-size:22px;fill:#59677a}.note{font-size:22px;fill:#59677a}
+</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0 0L10 5L0 10Z" fill="#617186"/></marker></defs><rect x="1" y="1" width="2058" height="538" rx="18" fill="#fbfcfe" stroke="#237e76" stroke-width="1.7"/>
+<text x="28" y="49" class="head" text-anchor="start">① 视觉塔：把图片 / 视频变成语言模型能接收的向量</text>
+<line x1="28" y1="75" x2="2032" y2="75" stroke="#237e76" opacity=".35"/>
+<rect x="35" y="120" width="450" height="137" rx="10" fill="#eaf7f4" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="422" x="260.0" y="155" class="node" text-anchor="middle">Patch Embedding</text>
+<text data-max-width="422" x="260.0" y="190" class="body" text-anchor="middle">Conv3d：2×14×14 patch</text>
+<text data-max-width="422" x="260.0" y="225" class="body" text-anchor="middle">[Nv,1176] → [Nv,1280]</text>
+<rect x="550" y="120" width="450" height="137" rx="10" fill="#eaf7f4" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="422" x="775.0" y="155" class="node" text-anchor="middle">ViT ×32</text>
+<text data-max-width="422" x="775.0" y="190" class="body" text-anchor="middle">LN → MHA → 残差</text>
+<text data-max-width="422" x="775.0" y="225" class="body" text-anchor="middle">LN → GELU MLP → 残差</text>
+<rect x="1065" y="120" width="450" height="137" rx="10" fill="#eaf7f4" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="422" x="1290.0" y="155" class="node" text-anchor="middle">Projector</text>
+<text data-max-width="422" x="1290.0" y="190" class="body" text-anchor="middle">Linear → GELU → Linear</text>
+<text data-max-width="422" x="1290.0" y="225" class="body" text-anchor="middle">1280 → 6144 → 6144</text>
+<rect x="1580" y="120" width="445" height="137" rx="10" fill="#eaf7f4" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="417" x="1802.5" y="155" class="node" text-anchor="middle">2×2 Patch Merger</text>
+<text data-max-width="417" x="1802.5" y="190" class="body" text-anchor="middle">4 个相邻向量拼接后映射</text>
+<text data-max-width="417" x="1802.5" y="225" class="body" text-anchor="middle">[Nv/4,24576] → [Nv/4,6144]</text>
+<polyline points="485,188 550,188" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="1000,188 1065,188" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<polyline points="1515,188 1580,188" fill="none" stroke="#617186" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="35" y="315" width="1990" height="137" rx="10" fill="#f3f6fa" stroke="#c9d4e0" stroke-width="1.7"/>
+<text data-max-width="1962" x="1030.0" y="350" class="node" text-anchor="middle">输出 [Nv/4,6144]，按图像/视频占位位置替换输入 Embedding 中的对应向量。</text>
+<text data-max-width="1962" x="1030.0" y="385" class="body" text-anchor="middle">例：处理后 672×672 图片 → 2304 个 patch → 576 个视觉 token；实际数量由 grid 决定。</text>
+<text data-max-width="1962" x="1030.0" y="420" class="body" text-anchor="middle">视觉塔独立于 60 层语言主干；合并后不再按语言/视觉分成两条主干。</text></svg>

@@ -1,6 +1,6 @@
 # MiniMax-M3.1-Flash：先看整体，再看 token 在层内怎么走
 
-修订日期：2026-11-13。[完整高清图 5400×10440](../minimax-m31-detailed-architecture.png) · [可编辑 SVG](../minimax-m31-detailed-architecture.svg) · [公式、shape 与数值例子](../../model_analyze.md)
+此页保留扩展分区资料。当前阅读入口为[单一主线 + 模块小图](../mainline/README.md)，完整主线图为 [5100×4890 PNG](../minimax-m31-detailed-architecture.png) / [SVG](../minimax-m31-detailed-architecture.svg)。公式、shape 与数值例子见[文字详解](../../model_analyze.md)。
 
 ## 01 整体顺序：视觉塔先编码，合流后进入 60 层
 
@@ -70,4 +70,4 @@ decode、分页缓存时序与可选 DSpark 保留在[文字详解](../../model_
 
 模型配置与 header 依据 [sources](../sources/README.md)。语言与 MSA 来自 ycl 的 Ascend 实现，视觉等共用模块来自上游 vLLM；具体提交、注册链与 M3.1 配置分支见[来源说明](../../model_analyze.md#162-本工作区实现)。静态结构分析未执行全量模型，图中的数值和选块示意不是实测激活。
 
-在 `architecture` 目录运行 `python draw_detailed.py --png` 重建 SVG 和 PNG；PNG 导出依赖已安装的 Chrome/Edge 和 Pillow。`detailed_sections.py` 定义整体顺序、两类代表层和对比图；`layout.json` 保存六个分区坐标。
+此页扩展分区可在 `architecture` 目录运行 `python draw_detailed.py --png` 重建，组合图另存为 `minimax-m31-expanded-reference.svg/png`；当前主线图用 `python draw_mainline.py --png` 重建，二者不互相覆盖。PNG 导出依赖已安装的 Chrome/Edge 和 Pillow。

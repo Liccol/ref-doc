@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2060" height="230" viewBox="0 0 2060 230" role="img"><title>02-gemma-rmsnorm</title><rect width="2060" height="230" fill="white"/><style>
+text{font-family:'Microsoft YaHei','Noto Sans CJK SC',Arial,sans-serif;fill:#22364c}
+.title{font-size:44px;font-weight:700}.head{font-size:31px;font-weight:700}
+.node{font-size:25px;font-weight:600}.body{font-size:24px}.small{font-size:22px}
+.weight{font-size:22px;fill:#59677a}.note{font-size:22px;fill:#59677a}
+</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0 0L10 5L0 10Z" fill="#617186"/></marker></defs><rect x="1" y="1" width="2058" height="228" rx="18" fill="#fbfcfe" stroke="#7758a6" stroke-width="1.7"/>
+<text x="28" y="49" class="head" text-anchor="start">② GemmaRMSNorm：归一化幅度，再做可学习的逐通道缩放</text>
+<line x1="28" y1="75" x2="2032" y2="75" stroke="#7758a6" opacity=".35"/>
+<text x="50" y="125" class="body" text-anchor="start">y = x / sqrt(mean(x²) + ε) × (1+w)；ε=10⁻⁶；不减均值，输出 shape 不变。</text>
+<text x="50" y="177" class="body" text-anchor="start">层内沿最后 6144 维计算；主 Q/K 和 index Q/K 则每 head 沿 128 维计算，权重各自独立。</text></svg>
