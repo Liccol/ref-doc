@@ -338,7 +338,7 @@ ND staging 是强制 NZ 等路径的候选适配设计，不是当前上游 onli
 
 ### 3.2 各场景的适配内容
 
-历史缺口来自本文固定基线，实施时对照 #22169、当前主线和后续补丁重新核对。已有实现和真机结果分别登记，支持范围绑定版本、模型、硬件和运行配置。
+历史缺口来自本文固定基线，实施时对照 #22493、当前主线和后续补丁重新核对。已有实现和真机结果分别登记，支持范围绑定版本、模型、硬件和运行配置。
 
 | 阶段 | 适配内容 | 进入后续阶段的条件 |
 | --- | --- | --- |
@@ -389,7 +389,7 @@ BF16 模型实际需要的 NZ、融合/转置、padding 和派生状态保址，
 
 | 阶段 | 核心交付 | 退出条件 |
 | --- | --- | --- |
-| 0 准备 | 对齐双仓与 #22169、首批模型、公共测试和支持限制 | 固定 SHA/checkpoint、设备/流约定、独立冷 B 及运行命令，足以并行开发 |
+| 0 准备 | 对齐双仓与 #22493、首批模型、公共测试和支持限制 | 固定 SHA/checkpoint、设备/流约定、独立冷 B 及运行命令，足以并行开发 |
 | 1 HCCL unpacked 基础 | 全层 Qwen3 dense 与 MoE 的真实权重更新 | 2 模型 × eager/图共 4 格在同一累计版本通过，含重复更新与失败修复，记 S0 |
 | 2 传输矩阵 | 在阶段 1 两个模型上补 HCCL packed、IPC unpacked、IPC packed | 每个模型 8 格，共 16 格真实执行，记 S1；同硬件/部署范围内保持相同 checkpoint 和参考数据 |
 | 3 Qwen3.5 | 复用底座，补 mixed attention、GDN 及 MoE 等实际后处理路径 | 先真实 HCCL unpacked eager/图，再复跑四条传输路径；全层型号逐项验收 |
@@ -402,7 +402,7 @@ BF16 模型实际需要的 NZ、融合/转置、padding 和派生状态保址，
 
 | 子任务 | 实现/核对内容 | 依赖和验收 |
 | --- | --- | --- |
-| 1.1 固定候选与部署 | 核对 #22169 可复用改动和当前 worker 继承/覆写；固定 dense/MoE 的完整模型、TP、硬件与运行 kernel | 无前置。全层 BF16 冷 A/B 都可启动并推理，记录内存预算和参考结果 |
+| 1.1 固定候选与部署 | 核对 #22493 可复用改动和当前 worker 继承/覆写；固定 dense/MoE 的完整模型、TP、硬件与运行 kernel | 无前置。全层 BF16 冷 A/B 都可启动并推理，记录内存预算和参考结果 |
 | 1.2 公共测试参数化 | case 支持模型、reload_mode、execution mode、backend、packing、sleep。用已有 fixture 加完整 Qwen3 用例，保留原 Layerwise 回归 | 与会话/通信开发并行。能明确收集本阶段 4 个 Direct cell，输出命令与配置 |
 | 1.3 Worker 会话 | 正确 device/config、start/update/finish、active/incomplete、目标重置、支持范围和异常传播 | 真实入口验证重复 start、无 start update/finish、失败后新完整更新；支持限制随首个增量生效 |
 | 1.4 Dense 加载闭环 | 原模型 loader、QKV/TP 分片、embedding/lm_head 别名、loader 属性和重复 PWAL | dense eager 先跑，逐参数/派生值与冷 B 对照。原始 checkpoint 为全层 |
@@ -442,7 +442,7 @@ Qwen3.5 先复用已有缩层用例检查 GDN/mixed attention/hook，再用选�
 
 存量回归先按“权重更新 e2e”而非仅按模型名盘点。GLM 核对 KDA/SFA/KPool 与 Indexer，DeepSeek 核对 sink、MLA/wo_a 和专家派生状态，Qwen 核对已有混合 attention/融合路径；MiniMax 先查仓内实际用例和精度，存在 BF16 可执行配置时加入 BF16 队列，已有量化用例归低精专项。每项记录现有入口、Layerwise 能否执行、Direct 新增 cell、缺口和对应 PR。已 skip 的用例先复现阻塞，再决定修复或声明范围；offload/MTP 等组合分别登记依赖。
 
-每个子任务可形成独立可验证增量。已经在 #22169 中实现的部分按最终累计版本复用，实际新 PR 聚焦剩余差异。发布前在同一版本复跑对应阶段矩阵，并保留此前已通过场景的回归。
+每个子任务可形成独立可验证增量。已经在 #22493 中实现的部分按最终累计版本复用，实际新 PR 聚焦剩余差异。发布前在同一版本复跑对应阶段矩阵，并保留此前已通过场景的回归。
 
 ### 4.2 开工前确认的场景条件
 
@@ -477,16 +477,27 @@ Qwen3.5 先复用已有缩层用例检查 GDN/mixed attention/hook，再用选�
 
 本节记录 4.1 交付计划使用的 PR 和存量回归。源码对照使用 Ascend 上游 `main@ed58d21a18922862432ce48574270dcc8438779c`，与本文开头用于代码走读的本地基线分别记录。本节测试结果来自 PR 报告，真机验收需在最终累计版本补齐。
 
-**PR 定位。** [Ascend #22169 变更](https://github.com/vllm-project/vllm-ascend/pull/22169/files)在查询时为 open、非 draft、未合入，head 为 `0098214840d1b6d118e602922f17271a9104d13c`，PR 声明的 vLLM 基线为 `ba15685ab7f4f5fbed8630bbb7441f8837e76fbe`。PR 描述的上游 G1 指 RFC 的参数保留和布局组，相关改动按本文模型与传输阶段接续验收。
+**当前候选为 [Ascend #22493](https://github.com/vllm-project/vllm-ascend/pull/22493)。** 2026-11-19 查询为 open、非 draft、未合入，head 为 `3299fd5f5639b02586d459f1d694042c6fc97799`，Ascend base 为 `58c42a4c1f0d84557c939d7534a294afc8a2cd4c`。PR 声明的配对 vLLM 为 `c410543d9ffff03f5f6c4a8c0ae1d3ad082c4a15`。此次检查了该 head 的 11 个变更文件、公开描述与评论，运行验收仍需补齐该版本的原始记录。
 
-| 此 PR 的内容 | 对应场景 | 后续交付 |
+该 PR 是第一阶段的候选实现。新增 `model_loader/weight_reload.py`，通过 worker patch 在 direct 启动时接入 checkpoint staging views；MoE 改为持久 NZ 回填、专家列表元素回填及保留加载源。Worker 的 start/update/finish 和磁盘入口增加配置上下文，异常/成功收尾调用目标重置。HCCL e2e 增加 Direct 模式、seed A/B 与各轮冷加载生成对照，并只在发送成功后 resume。
+
+| 第一阶段任务 | 当前 PR 涉及程度 | 距离本计划验收的剩余项 |
 | --- | --- | --- |
-| worker 配置上下文、失败收尾和目标重置，磁盘入口增加 NZ 检查 | 阶段 1 会话与支持入口 | 核对 runner 的 LoRA reset 依赖、补 incomplete 上报和完整支持表，覆盖失败后不恢复服务 |
-| BF16/FP16 MoE、EPLB/MegaMoe 专家列表、DeepSeek `wo_a`，以及 ND staging + 固定 NZ 运行区 | 阶段 1 MoE，后续模型 NZ 扩展 | 核对 Fused-MC2 实际路径及物理格式、 staging 常驻与峰值；按模型和硬件验收。PR 仍限制 `weight_nz_mode=0` |
-| GLM SFA KPool、native MLAPO 和 SFA PROLOG_V3 的派生回填 | 阶段 4 复杂模型 | 进入复杂模型交付，单测与组件证据接续复用；hook 所有权和 Indexer 加载单列 |
-| Qwen3.5 HCCL unpacked 加 `layerwise/direct` 参数，参考结果增加 seed 区分 | 阶段 3 Qwen3.5 HCCL unpacked | PR 无 HCCL/IPC 引擎改动。补独立 eager/no-sleep、两条 packed、IPC 与真实失败；packed 仍只收集处于 skip 的 Layerwise 用例 |
+| 1.1 候选与部署 | 明确配对版本、BF16、MRv2、weight_nz_mode=0；存在 NZ 与专家列表实现 | 固定全层 Qwen3 dense/MoE checkpoint、硬件/TP、两套冷启动和显存预算，补运行命令与日志 |
+| 1.2 测试参数化 | HCCL 用例新增 layerwise/direct，Direct 以两个 seed 构造 A/B 并比较独立冷启动生成结果；reference cache key 含 seed | QWEN_CASES 实际仍仅四层 Qwen3.5 MoE，尚无全层 Qwen3 dense/MoE。公共 reference 固定 FULL_DECODE_ONLY、capture size 1，并启用 sleep mode；需增加 eager/no-sleep 参数化和本阶段四格 |
+| 1.3 Worker 会话 | start/update/finish 使用当前 config，update 异常和 direct finish 异常结束会话并 reset target；有 mock UT | 真实 worker 多 rank 故障、incomplete 对外行为、支持范围及继承接口要验证。清 active 与模型已可服务分别检查 |
+| 1.4 Dense 加载闭环 | 有 dense-nd 组件 UT，复用既有未量化 Linear 和上游 loader | 新增全层 Qwen3 dense 的真实 HCCL eager 冷 B 对照，覆盖 alias/TP/第二轮属性 |
+| 1.5 HCCL unpacked | 复用现有 HCCL engine，测试执行真实 send_weights；失败发送后不 resume | 提交最终 head 的全层模型真传输结果，并观察 begin/padding→receive/load→finish 顺序和实际 rank/device。该 PR 未修改 HCCL 引擎 |
+| 1.6 Dense 原图 | 组件 UT 检查 Direct runtime data_ptr，HCCL 用例按图配置比较两条 prompt 的生成签名 | 全层 dense 的图对象、capture/replay、实际 kernel 消费者、逐状态/输出与冷 B 验收，原 storage 保活，补原图未被重捕获的证明 |
+| 1.7 MoE 加载与运行态 | 覆盖堆叠权重、持久 NZ、ND staging、expert-list 与 retire；UT 含四种布局×两种模式 | CPU UT 将 NPU cast 替为 clone，不能提供物理 NZ/原图结果。补全层 Qwen3 MoE eager/图、实际算子 dispatch、padding/全部专家与第二轮 begin |
+| 1.8 失败与修复 | 有布局不兼容拒绝 UT、worker finish 异常后释放 Direct 会话的 mock UT；HCCL 成功后 resume | 补真实部分写入、漏发、PWAL 失败→新 start 完整重发、多 rank RPC 和恢复推理，不将 mock 状态断言作为整轮修复结果 |
+| 1.9 S0 验收 | PR 描述提出磁盘/HCCL BF16 Qwen 支持，存在对应候选代码和部分测试设施 | Testing 小节尚无具体执行命令、通过数量或真机日志，公开检查尚未提供本阶段四格通过记录。补内存/时延/Layerwise 回归与同一累计 head 的四格验收 |
 
-PR 报告较早 12 文件版本的 A3/A5 HCCL unpacked 真机结果，其中 A5 明确为 FULL_DECODE_ONLY。CPU UT 结果对应另一候选版本。将其作为首个闭环的已有证据，按最终 head、配对 vLLM SHA、具体模型和运行配置复跑后更新状态。
+当前 HCCL e2e 从 dummy 模型开始，Direct 轮次为 seed A→B→A，逐轮比对独立冷加载的 text/logprobs。它尚未构造“真实冷 A 热模型→同权重 A→B→A”的完整序列，也未显式断言图对象/capture/replay。后续保留现有用例，再补计划中的真实冷 A 和图观察。
+
+阶段 2 的 IPC 和 packed 不在本 PR 的实现扩展范围。packed 用例仍沿用 skip，未新增 Direct packed lane。后续拆解继续按阶段 1 四格、阶段 2 16 格累计验收。
+
+代码定位见 [Qwen case](https://github.com/vllm-project/vllm-ascend/blob/3299fd5f5639b02586d459f1d694042c6fc97799/tests/e2e/common/rlhf/weight_transfer/case.py#L63)、[HCCL 测试入口](https://github.com/vllm-project/vllm-ascend/blob/3299fd5f5639b02586d459f1d694042c6fc97799/tests/e2e/pull_request/two_card/rlhf/weight_transfer/hccl/test_qwen_hccl.py)、[reference 图配置](https://github.com/vllm-project/vllm-ascend/blob/3299fd5f5639b02586d459f1d694042c6fc97799/tests/e2e/common/rlhf/weight_transfer/reference_check.py#L21)、[组件 UT](https://github.com/vllm-project/vllm-ascend/blob/3299fd5f5639b02586d459f1d694042c6fc97799/tests/ut/model_loader/test_weight_reload.py#L122)、[存储辅助实现](https://github.com/vllm-project/vllm-ascend/blob/3299fd5f5639b02586d459f1d694042c6fc97799/vllm_ascend/model_loader/weight_reload.py#L41)。
 
 **现有 Layerwise 权重更新回归台账。** 当前默认模式的用例按配对方式增加 Direct，显式设置两种 reload mode 并保留 Layerwise 原配置。按用例语义判断迁移范围。
 
@@ -515,15 +526,15 @@ PR 报告较早 12 文件版本的 A3/A5 HCCL unpacked 真机结果，其中 A5 
 
 | 编号 | 拆解工作与交付结果 | 主要依赖 | 预估投入（人日） | 负责人 | 预计完成日期 | 进展、阻塞与 PR/日志 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1.1 | 固定双仓与候选补丁、完整 dense/MoE checkpoint、硬件/TP；完成冷启动与显存预算检查 | checkpoint、设备可用 | 0.5–1 | 待认领 | 待填写 | 待开始 |
-| 1.2 | 参数化模型、reload mode、执行模式与 sleep；收集 4 个 Direct cell，准备独立冷 B 和原图观察 | 用例可先开发；实跑依赖 1.1 | 0.5–1 | 待认领 | 待填写 | 待开始 |
-| 1.3 | 接通 Worker start/update/finish、device/config、incomplete、目标重置和支持拒绝；补异常单测 | 1.1 的版本/接口确认 | 1–2 | 待认领 | 待填写 | 待开始 |
-| 1.4 | 全层 Qwen3 dense 加载与 PWAL 适配，核对 QKV/TP、embedding/lm_head 和第二轮 loader 属性；跑通 eager 冷 B 对照 | 1.1；联合执行需 1.2、1.3、1.5 | 1–2 | 待认领 | 待填写 | 待开始 |
-| 1.5 | HCCL unpacked 真实 trainer/worker、rank/device、broadcast/update 并发和跨流顺序，交付可重用发送脚本 | 1.1 的部署/协议确认 | 1–2 | 待认领 | 待填写 | 待开始 |
-| 1.6 | dense A→A→B→A 原图验证，检查持久地址、capture/replay 和输出，修复图路径问题 | 1.2–1.5 的 dense eager 闭环 | 1–2 | 待认领 | 待填写 | 待开始 |
-| 1.7 | 全层 MoE 的专家加载、w13/w2、列表、padding、实际 ND/NZ 适配，完成 eager/图和第二轮更新 | 模型检查可提前；联合验证依赖 1.2、1.3、1.5 | 2–4 | 待认领 | 待填写 | 待开始 |
-| 1.8 | 前置拒绝、部分写入、漏发和 PWAL 失败注入；验证保持暂停、完整重发修复及多 rank 后续 RPC | 1.3、1.5 与可执行模型闭环 | 1–2 | 待认领 | 待填写 | 待开始 |
-| 1.9 | S0 累计验收：dense/MoE 各 eager/图共 4 格，汇总冷 B、Layerwise 对照、原图、内存与时延 | 1.1–1.8 的交付就绪 | 0.5–1 | 待认领 | 待填写 | 待开始 |
+| 1.1 | 固定双仓与候选补丁、完整 dense/MoE checkpoint、硬件/TP；完成冷启动与显存预算检查 | checkpoint、设备可用 | 0.5–1 | 待认领 | 待填写 | 候选 PR #22493 已给出配对版本；全层模型/部署和冷启动记录待补 |
+| 1.2 | 参数化模型、reload mode、执行模式与 sleep；收集 4 个 Direct cell，准备独立冷 B 和原图观察 | 用例可先开发；实跑依赖 1.1 | 0.5–1 | 待认领 | 待填写 | 候选已有 Direct 与 seed A/B 对照；全层 Qwen3 dense/MoE、eager 参数和四格待补 |
+| 1.3 | 接通 Worker start/update/finish、device/config、incomplete、目标重置和支持拒绝；补异常单测 | 1.1 的版本/接口确认 | 1–2 | 待认领 | 待填写 | 候选已有 config/收尾与 mock UT；真实会话、incomplete/支持限制待验 |
+| 1.4 | 全层 Qwen3 dense 加载与 PWAL 适配，核对 QKV/TP、embedding/lm_head 和第二轮 loader 属性；跑通 eager 冷 B 对照 | 1.1；联合执行需 1.2、1.3、1.5 | 1–2 | 待认领 | 待填写 | 候选已有 dense 组件 UT；全层 dense HCCL eager 待验 |
+| 1.5 | HCCL unpacked 真实 trainer/worker、rank/device、broadcast/update 并发和跨流顺序，交付可重用发送脚本 | 1.1 的部署/协议确认 | 1–2 | 待认领 | 待填写 | 候选复用 HCCL unpacked；全层部署、跨流与实际运行记录待验 |
+| 1.6 | dense A→A→B→A 原图验证，检查持久地址、capture/replay 和输出，修复图路径问题 | 1.2–1.5 的 dense eager 闭环 | 1–2 | 待认领 | 待填写 | 全层 dense 原图/capture/replay 与完整冷 A 序列待补 |
+| 1.7 | 全层 MoE 的专家加载、w13/w2、列表、padding、实际 ND/NZ 适配，完成 eager/图和第二轮更新 | 模型检查可提前；联合验证依赖 1.2、1.3、1.5 | 2–4 | 待认领 | 待填写 | 候选已有 NZ staging/专家列表与组件 UT；全层 MoE/NZ/图待验 |
+| 1.8 | 前置拒绝、部分写入、漏发和 PWAL 失败注入；验证保持暂停、完整重发修复及多 rank 后续 RPC | 1.3、1.5 与可执行模型闭环 | 1–2 | 待认领 | 待填写 | 候选已有布局拒绝和 mock finish 失败；真实完整修复与多 rank 待补 |
+| 1.9 | S0 累计验收：dense/MoE 各 eager/图共 4 格，汇总冷 B、Layerwise 对照、原图、内存与时延 | 1.1–1.8 的交付就绪 | 0.5–1 | 待认领 | 待填写 | 待验收；当前 PR 公开信息未提供 S0 四格通过记录 |
 
 #### 第二阶段 · 四条传输路径
 
@@ -615,7 +626,7 @@ BF16 checkpoint 的未量化推理是本节重点。BF16 输入经 online quant 
 | Ling-3 | RFC BF16 MoE，GSM8K 0.908→0.900 | 同上，分数变化如实记录，避免称 GSM8K bitwise 相等 |
 | Inkling | RFC BF16、1.77 TB，GSM8K 0.889→0.892 | 大模型历史结果，仍需绑定具体提交、部署配置和作业 |
 
-在所核对的当前 refit 列表、RFC 表格和相关 PR validation 中，尚未定位 **Qwen3.5 BF16 的上游 Direct 全模型明确运行记录**。Qwen3 系列上游结果可作测试设计参考，Ascend #22169 的 Qwen3.5 证据继续单列。Hy4、Muse 等 dtype 未明确的表格项也未计入 BF16 清单。
+在所核对的当前 refit 列表、RFC 表格和相关 PR validation 中，尚未定位 **Qwen3.5 BF16 的上游 Direct 全模型明确运行记录**。Qwen3 系列上游结果可作测试设计参考，Ascend 侧 Qwen3.5 的候选用例范围按 4.4 节单列，仍需补对应版本的实际运行证据。Hy4、Muse 等 dtype 未明确的表格项也未计入 BF16 清单。
 
 ### 6.3 仓内测试和实际运行范围
 
