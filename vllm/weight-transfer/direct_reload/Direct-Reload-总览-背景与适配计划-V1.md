@@ -362,7 +362,7 @@ ND staging 是强制 NZ 等路径的候选适配设计，不是当前上游 onli
 | P0 阶段 4 | GLM/DeepSeek/MiniMax/Qwen 存量权重更新 e2e 验证与修复 | 按已有可执行用例、精度、硬件和入口登记 Layerwise/Direct。BF16 新分支逐模型适配，skip 与量化/offload 组合明确后续依赖 |
 | P1 阶段 5 | MTP 与投机推理 | 选定方法的 target/draft 刷新、独立更新/共享权重和失败隔离 |
 | P2 阶段 6 | 预量化、online quant 等低精 | 逐 scheme 验 checkpoint、转换、scale/派生值、原图与输出；共享资源优先保证 P0/P1 |
-| 配套 | sleep2/CaMem、offload 等 | P0 首跑 no-sleep，已有稳定组合可开展附加测试，按声明范围独立交付 |
+| 配套 | sleep Level 1/2、CaMem 与 offload 等 | P0 首跑 no-sleep，已有稳定组合可开展附加测试，按声明范围独立交付 |
 
 BF16 模型实际需要的 NZ、融合/转置、padding 和派生状态保址，随该模型所在阶段完成。阶段 1 只要求所选 Qwen3 配置可达的分支，后续模型的专有实现可并行准备。完整性、会话和支持限制在首个可用增量核对，复杂模型及两条通信线可在各自依赖就绪后提前开发。
 
@@ -385,7 +385,7 @@ BF16 模型实际需要的 NZ、融合/转置、padding 和派生状态保址，
 
 “全层”指所选 checkpoint 保留原始层数和模型结构，包括全部专家。缩层、缩专家和 toy 模型可用于定位，最终验收绑定全层配置。首批候选建议 dense 使用 Qwen3-0.6B、MoE 使用 Qwen3-30B-A3B 的 BF16 checkpoint，实际 checkpoint/revision 及可运行的 TP/EP 由开工资源评估确定。每项结果记录模型结构和参数 dtype。
 
-首批采用 target-only、未量化权重/KV、no-sleep；图模式先明确一种可执行配置，建议从 FULL_DECODE_ONLY 起步，登记 capture sizes 和实际 replay。eager 与图模式分别验收。A3/A5 按实际声明的硬件分别留证，设备资源决定两者先后。IPC no-sleep 在开工时测量 trainer 与推理进程的显存峰值，必要时调整 TP 和部署，sleep2 配置另行登记。
+首批采用 target-only、未量化权重/KV、no-sleep；图模式先明确一种可执行配置，建议从 FULL_DECODE_ONLY 起步，登记 capture sizes 和实际 replay。eager 与图模式分别验收。A3/A5 按实际声明的硬件分别留证，设备资源决定两者先后。IPC no-sleep 在开工时测量 trainer 与推理进程的显存峰值，必要时调整 TP 和部署，Level 1/2 配置分别登记。
 
 | 阶段 | 核心交付 | 退出条件 |
 | --- | --- | --- |
@@ -464,7 +464,7 @@ Qwen3.5 先复用已有缩层用例检查 GDN/mixed attention/hook，再用选�
 | 原图/存储 | 图场景检查具名消费者对象/alias/storage/data_ptr/offset/layout/物理 format，证明实际 replay、无 eager fallback、无额外 capture；保留旧 storage 引用，防释放后同址分配假通过。eager 不要求已有图，检查无意外 capture |
 | 入口/故障 | 真实 worker start/update/finish；覆盖前置拒绝、metadata、部分写入、PWAL 故障；失败后保持暂停，可恢复时新完整更新，通信组损坏允许重建；TP>1 观察 executor/RPC 后续行为 |
 | P0 资源/组合 | no-sleep 基线下验证 padding、跨流、声明支持的 TP/多卡、NPU/CPU 峰值与稳态内存、更新时延 |
-| sleep2 附加 | 仅对声明支持 sleep2 的组合要求：分 tag wake、纯参数/混合 allocation、非参数状态保留及原图生命周期；不作为全部 P0 组合默认门槛 |
+| sleep 附加 | Level 1 验旧权重恢复，以及恢复后 Direct 更新；Level 2 验丢弃内容后的完整重写与保留状态恢复。两者分别登记分 tag wake、原图和资源证据 |
 
 按阶段确认交付：阶段 1 完成 4 格，阶段 2 在同一累计版本完成 16 格；随后按 Qwen3.5、存量模型、MTP 和低精的具体支持配置递进验收。每条结果都绑定完整累计 tree 和对应原始日志。
 
@@ -472,6 +472,22 @@ Qwen3.5 先复用已有缩层用例检查 GDN/mixed attention/hook，再用选�
 
 台账按阶段和场景记录实现增量、来源 PR、模型/算子、支持配置与运行结果。分别登记实现状态和 NPU/端到端验收状态，区分已适配、已验、不适用、明确拒绝和待验证。
 
+
+#### Sleep Level 1 与 Level 2 的验收安排
+
+sleep 参数统一登记为 `none / level1 / level2`。启用 `enable_sleep_mode` 只表明内存池可用，测试必须实际调用 sleep/wake，才能登记相应级别通过。
+
+Level 1 要验证旧权重及所需运行状态从 CPU 备份恢复，唤醒后可以继续使用 A。Level 2 要验证可丢弃内容在唤醒后被完整重写，未重写状态得到保存/恢复。两种级别都需要检查地址、实际数据和原图 replay。具体保留策略以当前 worker/allocator 的 tag 与 allocation 行为为准。
+
+| 场景 | 执行流程 | 关键断言 |
+| --- | --- | --- |
+| Level 1 恢复 A | 冷 A 推理 → pause/drain → sleep(1) → wake 全部必要 tag → resume → 推理 A | 不发送新权重也能恢复冷 A 的状态/输出；原图、NZ、expert-list 等消费者正确，KV 重新就绪 |
+| Level 1 后更新 B | A → pause/drain → sleep(1) → wake weights/必要 runtime → Direct 完整更新 B、finish → wake KV → resume | 恢复的 A 被正确替换为 B，与独立冷 B 一致，下一轮还能恢复/更新；备份在 wake 时消费不构成更新失败后的回滚保证 |
+| Level 2 后更新 B | A → pause/drain → sleep(2) → wake weights/必要 runtime → 完整更新 B、finish → wake KV → resume | 所有必需区域被加载或重算，保留状态恢复，原图读取 B；finish 成功前不服务 |
+| 分段 wake 和故障 | 分别验证各级别适用的分 tag 唤醒、加载/finish 失败与修复 | 只唤醒 KV 时不访问尚未映射的 weights，部分失败保持暂停；修复或重建后才恢复 |
+| 多轮资源恢复 | 两种级别分别重复 sleep/wake 和 A/B 更新 | 记录释放量、CPU 备份量、稳态/峰值内存、时延和资源增长，检查图是否额外捕获 |
+
+阶段 1 完成 no-sleep 基础闭环时，对受改动影响的现有 Level 1 恢复能力做回归，优先使用完整 dense/MoE 各一个配置。阶段 2 在稳定通道上增加 Level 1 + Direct 和 Level 2 + Direct 的真实交换用例，优先验证 IPC 共卡配置，再覆盖实际承诺的 HCCL/packed 组合。逐模型新增状态、MTP 或低精路径时，对声明支持的 sleep 级别分别补验。no-sleep 16 格和 sleep 附加支持表分别记录，按业务范围扩展。
 
 ### 4.4 现有 PR 与 Layerwise 回归台账（2026-11-19）
 
@@ -564,7 +580,8 @@ Qwen3.5 先复用已有缩层用例检查 GDN/mixed attention/hook，再用选�
 | 4.4 | 其他 Qwen 存量 e2e 和新增融合/混合路径回归 | 已完成的 Qwen3/Qwen3.5 基线 | 1–3 / 型号 | 待认领 | 待填写 | 待开始 |
 | 5 | 一个选定 MTP/投机方法的更新、共享权重与失败隔离验收 | 已验证的 BF16 target | 4–7 / 方法与配置 | 待认领 | 待填写 | 待开始 |
 | 6 | 一个业务优先低精 scheme，权重/scale 转换、原图与传输验收；online quant 另拆 | 对应冷启动和 kernel 已可用 | 3–6 / scheme 与配置 | 待认领 | 待填写 | 待开始 |
-| 配套 | sleep2/CaMem 分段 wake、状态与资源恢复；offload 新分支另拆 | 稳定模型/通道，探针可提前 | 3–6 / 首个 sleep2 配置 | 待认领 | 待填写 | 待开始 |
+| 配套 L1 | Level 1 恢复 A、恢复后 Direct 更新 B、分段 wake、原图与多轮资源回归 | 首个稳定 dense/MoE 配置、现有 sleep 设施 | 1–2 / 首个 Level 1 配置 | 待认领 | 待填写 | 待开始 |
+| 配套 L2 | Level 2/CaMem 丢弃与保留策略、分段 wake、完整更新及状态/资源恢复；offload 新分支另拆 | 稳定模型/通道，探针可提前 | 3–6 / 首个 Level 2 配置 | 待认领 | 待填写 | 待开始 |
 
 进展建议使用“待开始、进行中、待联调、待验收、已完成、阻塞”，并补充当前结果、下一步和阻塞原因。个人局部测试通过后标“待联调”或“待验收”；对应场景在累计版本验收通过后标“已完成”。
 
@@ -580,7 +597,8 @@ Qwen3.5 先复用已有缩层用例检查 GDN/mixed attention/hook，再用选�
 | staging（ND 加载区） | 为强制 NZ 权重额外保留的、供 loader 写入的 ND 缓冲区（候选设计） |
 | retired 参数 | 标记退休的源参数：保留注册与数据、可再加载、kernel 参数枚举跳过 |
 | NZ / ND | Ascend FRACTAL_NZ 物理排布 / 普通 ND 排布 |
-| sleep2 | 本适配目标：按 allocation/tag 保留或丢弃状态；Ascend 具体支持待验证 |
+| sleep Level 1 | 备份并恢复权重池内容，需验证唤醒后继续推理 A，以及随后 Direct 更新 B |
+| sleep Level 2 | 按 allocation/tag 保留或丢弃状态，丢弃的必需内容由完整更新重写或后处理重算；具体支持待验证 |
 
 ### 5.1 refit 验证如何进行
 
