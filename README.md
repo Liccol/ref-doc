@@ -8,7 +8,7 @@
 
 - [MiniMax-M3.1-Flash 模型结构与 A5 开箱验证](minimax/minimax-m31-flash/)：全层精度、RL 测试命令与结果、减层待补验范围。
 
-- [Weight transfer 设计文档](vllm/weight-transfer/)：Packed tensor 方法流程、Ascend 适配与复用方案，附文档版本记录。
+- [Weight transfer 文档](vllm/weight-transfer/)：Direct Reload 调研与 Ascend 适配计划，以及 Packed 继承设计归档和版本记录。
 
 ## 环境信息维护约定
 

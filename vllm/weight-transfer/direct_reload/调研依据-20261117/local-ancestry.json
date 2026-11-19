@@ -1,0 +1,152 @@
+[
+  {
+    "number": 62407,
+    "status": "merged",
+    "local_ancestor": "yes",
+    "merge_commit_sha": "e10ef091baf01b3ba17b93e49e0a94228c36cbfb"
+  },
+  {
+    "number": 64336,
+    "status": "merged",
+    "local_ancestor": "yes",
+    "merge_commit_sha": "b5755c3ba5d4f751445be39c8ad8a50d9a8f93c1"
+  },
+  {
+    "number": 64692,
+    "status": "merged",
+    "local_ancestor": "yes",
+    "merge_commit_sha": "26d198bd56ae974201fd56e5150acb8b1e29042b"
+  },
+  {
+    "number": 65281,
+    "status": "merged",
+    "local_ancestor": "yes",
+    "merge_commit_sha": "66360a5cd0ad1158b2c950f924671fca68a948ff"
+  },
+  {
+    "number": 64357,
+    "status": "merged",
+    "local_ancestor": "yes",
+    "merge_commit_sha": "14a5bb4adcc86e4c953236e048bae28512c92427"
+  },
+  {
+    "number": 57678,
+    "status": "merged",
+    "local_ancestor": "yes",
+    "merge_commit_sha": "f9db1756e9e6809b209bb906c950ac577fdef90f"
+  },
+  {
+    "number": 65914,
+    "status": "merged",
+    "local_ancestor": "yes",
+    "merge_commit_sha": "51ae6f4da19769fb3a14152a09590ebf357dcdea"
+  },
+  {
+    "number": 64886,
+    "status": "merged",
+    "local_ancestor": "yes",
+    "merge_commit_sha": "e5d0ef3527c90ff14707b0b209d113e573615aab"
+  },
+  {
+    "number": 64352,
+    "status": "merged",
+    "local_ancestor": "yes",
+    "merge_commit_sha": "ba15685ab7f4f5fbed8630bbb7441f8837e76fbe"
+  },
+  {
+    "number": 64691,
+    "status": "merged",
+    "local_ancestor": "yes",
+    "merge_commit_sha": "be712f5601dc7eebf43aa42848be6a84256dcada"
+  },
+  {
+    "number": 66010,
+    "status": "merged",
+    "local_ancestor": "yes",
+    "merge_commit_sha": "f8b116409c4cdf02cee4bb7eca8e6bb9780c2e35"
+  },
+  {
+    "number": 65296,
+    "status": "merged",
+    "local_ancestor": "yes",
+    "merge_commit_sha": "22d05b87bbc98be5974922fa372076bd6fd579af"
+  },
+  {
+    "number": 65347,
+    "status": "merged",
+    "local_ancestor": "yes",
+    "merge_commit_sha": "0cf8b0f8bab1ed6465401949bdb82d87179ea8d0"
+  },
+  {
+    "number": 65487,
+    "status": "merged",
+    "local_ancestor": "yes",
+    "merge_commit_sha": "d5bc1e4d53730ad7ee26f608e4be4fda1d593d58"
+  },
+  {
+    "number": 65802,
+    "status": "merged",
+    "local_ancestor": "object_missing",
+    "merge_commit_sha": "a4910b41280ae228bcc74ebc9d21144e09ef63ef"
+  },
+  {
+    "number": 66118,
+    "status": "merged",
+    "local_ancestor": "object_missing",
+    "merge_commit_sha": "902364d152ff5cc204addd049c217e3bd68cc2fe"
+  },
+  {
+    "number": 65353,
+    "status": "open",
+    "local_ancestor": "未检查（未合入）",
+    "merge_commit_sha": "b78888bcb3432525d85766cb9f25ea6565d41279"
+  },
+  {
+    "number": 65799,
+    "status": "open",
+    "local_ancestor": "未检查（未合入）",
+    "merge_commit_sha": "2c44d19d83dba1d1809a8482dd769fe945cf48ce"
+  },
+  {
+    "number": 66002,
+    "status": "open",
+    "local_ancestor": "未检查（未合入）",
+    "merge_commit_sha": null
+  },
+  {
+    "number": 66487,
+    "status": "open",
+    "local_ancestor": "未检查（未合入）",
+    "merge_commit_sha": "a0379c01b0b58f74d255690a6c7b657070e5e8b7"
+  },
+  {
+    "number": 66666,
+    "status": "draft",
+    "local_ancestor": "未检查（未合入）",
+    "merge_commit_sha": null
+  },
+  {
+    "number": 68043,
+    "status": "draft",
+    "local_ancestor": "未检查（未合入）",
+    "merge_commit_sha": "42844ee9325c99cfa0a8fd2c2cf6a1eea9038a22"
+  },
+  {
+    "number": 68032,
+    "status": "draft",
+    "local_ancestor": "未检查（未合入）",
+    "merge_commit_sha": "f1ce586c1d91402455ec4388da1ff9cc9c1cf5e2"
+  },
+  {
+    "number": 65562,
+    "status": "draft",
+    "local_ancestor": "未检查（未合入）",
+    "merge_commit_sha": null
+  },
+  {
+    "number": 60401,
+    "status": "draft",
+    "local_ancestor": "未检查（未合入）",
+    "merge_commit_sha": null
+  }
+]
