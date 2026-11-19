@@ -4,7 +4,7 @@
 
 ## 阅读入口
 
-- [背景与适配计划 V1](Direct-Reload-总览-背景与适配计划-V1.md)：当前主计划。按全层 Qwen3 dense/MoE 的 HCCL unpacked、四条通信路径、Qwen3.5、存量模型回归、MTP、低精递进交付。第 6 章记录上游 BF16 验证调研。
+- [背景与适配计划 V1](Direct-Reload-总览-背景与适配计划-V1.md)：当前主计划。按全层 Qwen3 dense/MoE 的 HCCL unpacked、四条通信路径、Qwen3.5、存量模型回归、MTP、低精递进交付。3.4、4.4.2 纳入开发者计划与运行报告，补充基线迁移、证据核验和任务抵扣；第 6 章记录上游 BF16 验证调研。
 - [Layerwise 与 Direct 方法级代码走读](Layerwise与Direct权重重载-方法级代码走读.md)：冷启动、meta/materialize、loader、PWAL、finish 和存储回填的对比，解释临时参数的来源。
 
 ## 参考与历史材料
