@@ -1,12 +1,14 @@
 # 2026-11-21 实测结果
 
+**后续进展：** 新增的可选 `merged` 模式已在同拓扑 TP2/DP2/EP 下通过模型8/8、混合服务36/36，详见 [正式实现与验收](merged-mode.md) 和 [代码提交 `b9db9e22e`](https://github.com/Liccol/vllm-ascend/commit/b9db9e22e6f2d0b682e022a371d6cc514907f8fe)。下文保留默认低秩模式的历史结果；跨 TP1→TP2 仍只有4/8一致，全层与训练 adapter 尚未验证。
+
 - [测试方案](validation-plan.md)、[复现步骤](reproduce.md)。
 - [开发代码 `9572a92cc`](https://github.com/Liccol/vllm-ascend/commit/9572a92cc33141bf023e1c89bcba95e4287130b7)，位于 `minimax-m31-lora` 分支，未创建上游 PR。
 - [原始请求及批次记录](evidence.tar.gz)，[SHA256](SHA256SUMS)。压缩包保留初始弱 fixture、增强 fixture 默认模式、BI模式、同拓扑 merged 对照和独立 NPU 数值诊断；不包含模型权重、地址和账密。
 
-**总体状态：未通过用户要求的全部验收。** 五段投影适配已能加载和执行两个 adapter，服务隔离在 batch-invariance 模式下通过；merged 与动态 LoRA 的 token ID 全一致仍未通过。不将数值近似改称为该硬性规则通过。
+**默认低秩模式状态：未通过用户要求的全部验收。** 五段投影适配已能加载和执行两个 adapter，服务隔离在 batch-invariance 模式下通过；merged 与动态 LoRA 的 token ID 全一致仍未通过。不将数值近似改称为该硬性规则通过。
 
-后续 [逐层分歧定位与因果对照](divergence.md) 已完成：独立 FP64 低秩仍为3/8；完整 merged GEMM 测试控制在同拓扑达到8/8。生产 LoRA 的严格模型验收结论保持失败。
+后续 [逐层分歧定位与因果对照](divergence.md) 已完成：独立 FP64 低秩仍为3/8；完整 merged GEMM 测试控制在同拓扑达到8/8。默认低秩路径的严格模型验收结论保持失败；可选 merged 模式单列报告。
 
 ## 1. 版本与资产
 
