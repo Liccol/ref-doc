@@ -1,5 +1,7 @@
 # ref-doc
 
+- [LoRA 代码链路](vllm/lora/)：基于 Ascend 配套的固定 vLLM commit，梳理使能、初始化、adapter 加载、槽位映射与推理执行。
+
 - [Tool Calling 变更记录](vllm/toolcall/)：vLLM 与 vLLM Ascend 中与工具调用相关的新特性、变更和问题修复。
 - [Router 变更记录](vllm/router/)：vLLM Router 与 SGLang Model Gateway 服务路由器的新特性、变更和问题修复。具体范围见 [Router 调研说明](vllm/router/README.md)。
 - [MiniMax Agent 调研](minimax/agent/)：五个相关仓库的内容总览与变更记录，重点关注 minimax-code。
