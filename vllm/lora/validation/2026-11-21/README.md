@@ -1,5 +1,7 @@
 # 2026-11-21 实测结果
 
+**当前采用标准低秩：** [继续定位与跨 TP 实测](standard-low-rank.md) 复现模型3/8、服务36/36；两种精度改动均未通过完整规则，未合入生产路径。标准低秩 TP1与TP2对比为3/8，不能计入历史 merged 缓存模式的通过结果。
+
 **后续进展：** 新增的可选 `merged` 模式已在同拓扑 TP2/DP2/EP 下通过模型8/8、混合服务36/36，详见 [正式实现与验收](merged-mode.md) 和 [代码提交 `b9db9e22e`](https://github.com/Liccol/vllm-ascend/commit/b9db9e22e6f2d0b682e022a371d6cc514907f8fe)。下文保留默认低秩模式的历史结果；跨 TP1→TP2 仍只有4/8一致，全层与训练 adapter 尚未验证。
 
 - [测试方案](validation-plan.md)、[复现步骤](reproduce.md)。

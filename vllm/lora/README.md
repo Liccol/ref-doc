@@ -15,6 +15,7 @@
 - [源码索引](code-map.md)：按阅读顺序列出固定 commit 的源码链接与关键函数。
 - [Ascend 接入与 MiniMax 边界](ascend-and-minimax.md)：NPU wrapper、算子选择及当前适配缺口。
 - [M3.1 BF16 LoRA 测试方案与实测](validation/2026-11-21/README.md)：四层真实 BF16、双 adapter、TP/DP/EP；默认低秩模型3/8，可选 merged 模式同拓扑模型8/8、服务36/36，跨 TP 仍有差异。
+- [标准低秩与跨 TP 继续定位](validation/2026-11-21/standard-low-rank.md)：当前采用标准低秩；两种精度控制及真实两卡 HCCL 对照未消除原硬指标失败，保留未通过状态。
 
 ## 1. 先区分三个阶段
 
